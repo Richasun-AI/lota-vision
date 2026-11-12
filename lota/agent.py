@@ -194,11 +194,13 @@ def _matches(p, photo_type):
     return not m or (photo_type and any(x in photo_type.lower() for x in m))
 
 
-def inspect_image(directory, image_path, photo_type="", only=None, meta=None, save=True):
-    """按检测管线检查一张图；返回 {verdict: pass|warn|fail|skip, findings[], detections…}"""
+def inspect_image(directory, image_path, photo_type="", only=None, meta=None, save=True, pipes=None):
+    """按检测管线检查一张图；返回 {verdict: pass|warn|fail|skip, findings[], detections…}
+    pipes：直接给要跑的管线（实时监控用），不再按 only / 照片类型筛选"""
     t0 = time.time()
-    pipes = [p for p in load_pipelines(directory) if p.get("enabled", True) and (not only or p["id"] in only)]
-    pipes = [p for p in pipes if only or _matches(p, photo_type)]
+    if pipes is None:
+        pipes = [p for p in load_pipelines(directory) if p.get("enabled", True) and (not only or p["id"] in only)]
+        pipes = [p for p in pipes if only or _matches(p, photo_type)]
     results, rank = [], {"pass": 0, "skip": 0, "warn": 1, "fail": 2}
     for p in pipes:
         info, model = _model(directory, p.get("model", "production"))

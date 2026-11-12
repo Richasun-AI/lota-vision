@@ -26,6 +26,7 @@ const ICONS = {
   trophy: "M6 3h8v5a4 4 0 0 1-8 0z M6 5H3a3 3 0 0 0 3 3 M14 5h3a3 3 0 0 1-3 3 M10 12v3 M7 17h6",
   shield: "M10 2l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V5z M7 10l2 2 4-4",
   search: "M9 15A6 6 0 1 0 9 3a6 6 0 0 0 0 12z M13.5 13.5L17 17",
+  camera: "M3 6h3l1.5-2h5L14 6h3v10H3z M10 14a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
   tool: "M12 3a4 4 0 0 0 4 5l-8 8a2 2 0 0 1-3-3l8-8a4 4 0 0 0-1-2z",
   gear: "M10 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M10 2v2m0 12v2M2 10h2m12 0h2M4.3 4.3l1.4 1.4m8.6 8.6 1.4 1.4M4.3 15.7l1.4-1.4m8.6-8.6 1.4-1.4",
   plug: "M7 2v4m6-4v4 M5 6h10v3a5 5 0 0 1-10 0z M10 14v4",
@@ -34,7 +35,7 @@ const SIDEBAR = [
   ["开始", [["link", "/overview", "总览", "home"], ["link", "/guide", "使用指南", "book"]]],
   ["数据", [["tab", "gallery"], ["link", "/types", "照片类型", "tag"], ["tab", "labels"], ["link", "/datasets", "数据集", "datasets"]]],
   ["训练与应用", [["link", "/flow", "工作流", "flow", "推荐"], ["link", "/models", "模型中心", "trophy"],
-    ["link", "/inspect", "智能质检", "shield"], ["link", "/review", "结果复核", "search"], ["link", "/toolbox", "工具箱", "tool"]]],
+    ["link", "/inspect", "智能质检", "shield"], ["link", "/streams", "实时监控", "camera"], ["link", "/review", "结果复核", "search"], ["link", "/toolbox", "工具箱", "tool"]]],
   ["系统", [["tab", "jobs"], ["link", "/settings", "项目设置", "gear"], ["link", "/developers", "开发者 API", "plug"]]],
 ];
 const LEGACY_TABS = ["datasets", "models", "workflows"];   // 已有新版独立页面，旧视图收进“旧版页面”

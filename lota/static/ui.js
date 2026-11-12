@@ -54,7 +54,7 @@ const UI = (() => {
   const LINKS = [
     ["/overview", "总览", "overview"], ["/guide", "使用指南", "guide"], null,
     ["/", "工作台", "home"], ["/types", "照片类型", "types"], ["/datasets", "数据集", "datasets"], null,
-    ["/flow", "工作流", "flow"], ["/models", "模型中心", "models"], ["/inspect", "智能质检", "inspect"], ["/review", "结果复核", "review"], ["/toolbox", "工具箱", "toolbox"], null,
+    ["/flow", "工作流", "flow"], ["/models", "模型中心", "models"], ["/inspect", "智能质检", "inspect"], ["/streams", "实时监控", "streams"], ["/review", "结果复核", "review"], ["/toolbox", "工具箱", "toolbox"], null,
     ["/settings", "项目设置", "settings"], ["/developers", "开发者 API", "developers"],
   ];
   let projects = [], projectListeners = [];

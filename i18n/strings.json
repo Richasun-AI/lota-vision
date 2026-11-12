@@ -455,11 +455,17 @@
  ">这里只列出每次需要改的参数": [
   "flow.js"
  ],
+ "A 区 3 号楼": [
+  "streams.js"
+ ],
  "A/B 对比": [
   "models.js"
  ],
  "AI 审核中…": [
   "m.js"
+ ],
+ "AI 检测与报警": [
+  "streams.js"
  ],
  "AI 预检": [
   "flow.py",
@@ -576,6 +582,9 @@
  ],
  "HF 缓存": [
   "learning.py"
+ ],
+ "IP / 域名": [
+  "streams.js"
  ],
  "ImageNet 预训练": [
   "backends_tv.py",
@@ -740,6 +749,9 @@
  ],
  "PR 曲线（轮廓）": [
   "hub.py"
+ ],
+ "RTSP 默认 554": [
+  "streams.js"
  ],
  "ResNet-18（非 YOLO，数据少时）": [
   "models.js"
@@ -1206,8 +1218,14 @@
  "{0} · 子项目 {1} · {2}": [
   "report.js"
  ],
+ "{0} · 实时画面": [
+  "streams.js"
+ ],
  "{0} · 强度 {1} · {2} 毫秒（预览按长边 1600 处理）": [
   "toolbox.js"
+ ],
+ "{0} · 截图": [
+  "streams.js"
  ],
  "{0} · 标注规范": [
   "hub.py"
@@ -1287,11 +1305,20 @@
  "{0} 的训练图表": [
   "models.js"
  ],
+ "{0} 秒内没连上": [
+  "streams.py"
+ ],
+ "{0} 秒内没连上：检查网络是否通（服务器能不能 ping 到摄像头）": [
+  "streams.py"
+ ],
  "{0} 秒后自动重试": [
   "models.js"
  ],
  "{0} 秒后自动重连": [
   "models.js"
+ ],
+ "{0} 秒后重试": [
+  "streams.py"
  ],
  "{0} 轮": [
   "models.js"
@@ -1445,6 +1472,9 @@
  "· 默认 {0}": [
   "settings.js"
  ],
+ "— 选子项目 —": [
+  "streams.js"
+ ],
  "“{0}”既不是本场景的类别，也不是标准照片类型；请在类别编辑器里先添加": [
   "flow.py"
  ],
@@ -1553,6 +1583,12 @@
  "⑦ 其他工具": [
   "flow.py"
  ],
+ "■ 停止": [
+  "streams.js"
+ ],
+ "▶ 看画面": [
+  "streams.js"
+ ],
  "▶ 续跑": [
   "flow.js",
   "guide.js"
@@ -1597,6 +1633,12 @@
  "✅ 全部完成": [
   "flow.js",
   "models.js"
+ ],
+ "✅ 连上了": [
+  "streams.js"
+ ],
+ "✅ 连上了：{0}×{1}，用时 {2} 毫秒": [
+  "streams.js"
  ],
  "✓ 已确认": [
   "types.js"
@@ -1723,6 +1765,9 @@
  ],
  "一般": [
   "models.js"
+ ],
+ "一般 1–2 秒": [
+  "streams.js"
  ],
  "一般 50–150": [
   "models.js"
@@ -1869,6 +1914,12 @@
  "上次传到 {0}%，从断点继续…": [
   "models.js"
  ],
+ "上次报警": [
+  "streams.js"
+ ],
+ "上次报警：": [
+  "streams.js"
+ ],
  "上次训练": [
   "types.js"
  ],
@@ -1950,6 +2001,9 @@
  "下载器把巡检照片存成 downloads/<工单>/<站点>/<图片类型>/<附件>.jpg；下面的脚本盯住这个目录，新照片一落地就推给引擎质检，断点续推。": [
   "developers.js"
  ],
+ "下载截图": [
+  "streams.js"
+ ],
  "下载数据集 zip": [
   "models.js"
  ],
@@ -1988,6 +2042,9 @@
  ],
  "不会写就点下面的": [
   "settings.js"
+ ],
+ "不会报警": [
+  "streams.js"
  ],
  "不会进训练": [
   "hub.py"
@@ -2047,7 +2104,8 @@
   "guide.js",
   "inspect.js",
   "m.js",
-  "report.js"
+  "report.js",
+  "streams.js"
  ],
  "不合格 / 需注意时，让本机 Ollama 的 qwen2.5vl 看图补一句说明（每张约 3–10 秒）": [
   "inspect.js"
@@ -2132,6 +2190,9 @@
  "不改图库": [
   "flow.py"
  ],
+ "不改就留着 ******": [
+  "streams.js"
+ ],
  "不是从模板来的": [
   "flow.js"
  ],
@@ -2153,6 +2214,9 @@
  ],
  "不留大片空白": [
   "hub.py"
+ ],
+ "不看画面也会检测": [
+  "streams.js"
  ],
  "不知道参数怎么填": [
   "guide.js"
@@ -2442,6 +2506,12 @@
  "主动学习默认值": [
   "settings.js"
  ],
+ "主码流": [
+  "streams.js"
+ ],
+ "主码流（高清）": [
+  "streams.js"
+ ],
  "主要类别": [
   "datasets.js"
  ],
@@ -2484,6 +2554,9 @@
  "也可以 Ctrl+V 粘贴截图": [
   "models.js"
  ],
+ "也可以填在下面两格": [
+  "streams.js"
+ ],
  "也可以把视频放到服务器上引擎允许读的任意目录": [
   "toolbox.js"
  ],
@@ -2495,6 +2568,9 @@
  ],
  "也可用来扩充训练数据": [
   "flow.py"
+ ],
+ "也越占显卡": [
+  "streams.js"
  ],
  "交互式文档在": [
   "guide.js"
@@ -2736,6 +2812,9 @@
  "从零画框": [
   "flow.py"
  ],
+ "仓库大门": [
+  "streams.js"
+ ],
  "仔细看这张图": [
   "vlmcheck.py"
  ],
@@ -2774,6 +2853,9 @@
  ],
  "以前的分类结果文件": [
   "app.js"
+ ],
+ "以及摄像头是否开了 RTSP": [
+  "streams.py"
  ],
  "以后扫描到同样内容也不再登记": [
   "flow.py"
@@ -2906,6 +2988,9 @@
  "但误报也越多": [
   "datasets.js"
  ],
+ "位置": [
+  "streams.js"
+ ],
  "位置的变化": [
   "settings.js"
  ],
@@ -2996,6 +3081,9 @@
  "例如 demo-y8m-v2；可写 {dataset}（= 数据集版本名）和 {n}（自动编号），如 {dataset}-n": [
   "flow.py"
  ],
+ "例如 rtsp": [
+  "streams.py"
+ ],
  "例：{dataset}-{size}-v{n} → demo-r3-s-v1（同一数据集再训一次会自动变成 v2）": [
   "settings.js"
  ],
@@ -3013,6 +3101,7 @@
  ],
  "保存": [
   "inspect.js",
+  "streams.js",
   "workflow.js"
  ],
  "保存任务": [
@@ -3124,6 +3213,9 @@
  ],
  "先从⑤归类为": [
   "flow.py"
+ ],
+ "先勾选报警截图": [
+  "streams.js"
  ],
  "先去 Label Studio 标注并回收": [
   "models.js"
@@ -3245,6 +3337,12 @@
  "全挤在中间": [
   "datasets.js"
  ],
+ "全选": [
+  "streams.js"
+ ],
+ "全选 / 取消": [
+  "streams.js"
+ ],
  "全选本页": [
   "types.js"
  ],
@@ -3253,6 +3351,7 @@
   "flow.js",
   "inspect.js",
   "review.html",
+  "streams.js",
   "types.js"
  ],
  "全部合格": [
@@ -3266,6 +3365,9 @@
  ],
  "全部工单": [
   "report.js"
+ ],
+ "全部摄像头": [
+  "streams.js"
  ],
  "全部标完后选 Targets reviewed": [
   "hub.py"
@@ -3326,6 +3428,12 @@
  "共 {0} 张：不合格 {1}，需注意 {2}，合格 {3}{4}": [
   "flow.js"
  ],
+ "共 {0} 条": [
+  "streams.js"
+ ],
+ "共 {0} 条（最近 200 条）": [
+  "streams.js"
+ ],
  "共 {1} 个": [
   "hub.py"
  ],
@@ -3372,10 +3480,12 @@
   "app.js",
   "models.js",
   "settings.js",
+  "streams.js",
   "ui.js"
  ],
  "其他": [
-  "datasets.js"
+  "datasets.js",
+  "streams.py"
  ],
  "其他 Agent": [
   "developers.js"
@@ -3388,6 +3498,9 @@
  ],
  "其他能接的": [
   "flow.js"
+ ],
+ "其他（直接填地址）": [
+  "streams.py"
  ],
  "其余合并为": [
   "datasets.js"
@@ -3507,6 +3620,9 @@
  ],
  "出现在几帧": [
   "models.js"
+ ],
+ "出错": [
+  "streams.js"
  ],
  "分别训练多少轮": [
   "settings.js"
@@ -3689,6 +3805,12 @@
  "创建 Label Studio 视频项目…": [
   "toolbox.js"
  ],
+ "创建后不能改": [
+  "streams.js"
+ ],
+ "创建后不能改，报警截图按它归档": [
+  "streams.js"
+ ],
  "初始学习率": [
   "flow.py"
  ],
@@ -3713,10 +3835,17 @@
  "删除": [
   "app.js",
   "inspect.js",
+  "streams.js",
   "types.js"
  ],
  "删除 {0} 张照片": [
   "types.js"
+ ],
+ "删除 {0} 条报警截图": [
+  "streams.js"
+ ],
+ "删除 {0} 条报警截图？": [
+  "streams.js"
  ],
  "删除于": [
   "types.js"
@@ -3726,6 +3855,12 @@
  ],
  "删除所选图片": [
   "app.js"
+ ],
+ "删除摄像头": [
+  "streams.js"
+ ],
+ "删除摄像头「{0}」？已有的报警截图会保留。": [
+  "streams.js"
  ],
  "删除照片": [
   "cleanup.py",
@@ -3755,6 +3890,9 @@
  "删除这张照片？": [
   "app.js"
  ],
+ "删除选中": [
+  "streams.js"
+ ],
  "判为超标": [
   "review.js"
  ],
@@ -3782,7 +3920,11 @@
   "flow.py"
  ],
  "刷新": [
-  "app.js"
+  "app.js",
+  "streams.js"
+ ],
+ "刷新页面重试": [
+  "streams.py"
  ],
  "前 10 个类别": [
   "datasets.js"
@@ -3823,6 +3965,8 @@
   "overview.html",
   "report.html",
   "settings.html",
+  "streams.html",
+  "streams.js",
   "toolbox.html",
   "types.html",
   "types.js"
@@ -4168,12 +4312,16 @@
  "发电机房": [
   "types.js"
  ],
+ "取流地址": [
+  "streams.js"
+ ],
  "取消": [
   "datasets.js",
   "inspect.js",
   "models.js",
   "overview.js",
   "settings.js",
+  "streams.js",
   "toolbox.js",
   "types.js"
  ],
@@ -4231,6 +4379,9 @@
  "只在这类照片里找（可不填）": [
   "flow.py"
  ],
+ "只影响记录里的标注": [
+  "streams.js"
+ ],
  "只扫": [
   "flow.py"
  ],
@@ -4282,6 +4433,9 @@
  "只查验证集": [
   "datasets.js",
   "guide.js"
+ ],
+ "只用下面的模型画框": [
+  "streams.js"
  ],
  "只用写了关键词的规则": [
   "inspect.js"
@@ -4336,10 +4490,17 @@
   "flow.py",
   "inspect.js",
   "m.js",
+  "streams.js",
   "types.js"
+ ],
+ "可不填，如：A 区 3 号楼": [
+  "streams.js"
  ],
  "可不填，自动生成 custom_N；如 generator_room": [
   "types.js"
+ ],
+ "可不填；只影响记录里的标注": [
+  "streams.js"
  ],
  "可不填；用逗号分隔，如：发电机,油箱": [
   "types.js"
@@ -4355,6 +4516,9 @@
  ],
  "可以减少误报": [
   "datasets.js"
+ ],
+ "可以去工作台送标注了": [
+  "streams.js"
  ],
  "可以只把通过的送去标注": [
   "flow.py"
@@ -4593,6 +4757,12 @@
  "同一组的图不会两边都有": [
   "flow.py"
  ],
+ "同一路摄像头两次报警至少隔多久": [
+  "streams.js"
+ ],
+ "同一路摄像头两次报警至少隔多久，防止刷屏": [
+  "streams.js"
+ ],
  "同一部分来比才公平": [
   "models.js"
  ],
@@ -4631,6 +4801,7 @@
  ],
  "名称": [
   "overview.js",
+  "streams.js",
   "workflow.js"
  ],
  "名称里带 left": [
@@ -4704,8 +4875,20 @@
  "命中够这么多张就停（最多 1000），够标一轮就行": [
   "flow.py"
  ],
+ "命中就报警并截图存证": [
+  "streams.js"
+ ],
  "命中的分流到目录": [
   "flow.py"
+ ],
+ "命中的画面会出现在这里": [
+  "streams.js"
+ ],
+ "命中规则": [
+  "streams.js"
+ ],
+ "命中规则（不合格 / 需注意）就报警截图": [
+  "streams.js"
  ],
  "命令已复制": [
   "models.js"
@@ -4772,6 +4955,12 @@
  ],
  "和视频": [
   "models.js"
+ ],
+ "品牌": [
+  "streams.js"
+ ],
+ "品牌 / 接入方式": [
+  "streams.js"
  ],
  "哪些类别容易认错": [
   "hub.py"
@@ -5138,6 +5327,12 @@
  "在项目设置或训练向导的高级设置里把“每批张数”减半（8 → 4），或把图片尺寸调小。": [
   "guide.js"
  ],
+ "地址要以 {0} 开头": [
+  "streams.py"
+ ],
+ "地址要以 {0} 开头，例如 rtsp://192.168.1.64:554/stream1": [
+  "streams.py"
+ ],
  "地面": [
   "flow.py"
  ],
@@ -5169,6 +5364,9 @@
  ],
  "均衡（推荐）": [
   "models.js"
+ ],
+ "域名": [
+  "streams.js"
  ],
  "基础模型": [
   "models.js"
@@ -5386,6 +5584,13 @@
  "够标一轮就行": [
   "flow.py"
  ],
+ "大华": [
+  "streams.js",
+  "streams.py"
+ ],
+ "大华会自动拼好取流地址": [
+  "streams.js"
+ ],
  "大图建议先切片": [
   "templates.js"
  ],
@@ -5482,8 +5687,14 @@
  "如：PCB 缺陷检测": [
   "overview.js"
  ],
+ "如：gate-1（小写字母、数字、- _）": [
+  "streams.js"
+ ],
  "如：site_ground, 站内地面（留空 = 全部照片）": [
   "inspect.js"
+ ],
+ "如：仓库大门": [
+  "streams.js"
  ],
  "如：发电机房": [
   "types.js"
@@ -5537,6 +5748,15 @@
  "子文件夹名": [
   "flow.py"
  ],
+ "子码流": [
+  "streams.js"
+ ],
+ "子码流或通道号": [
+  "streams.py"
+ ],
+ "子码流（省带宽，推荐）": [
+  "streams.js"
+ ],
  "子项目": [
   "agent.py",
   "developers.js",
@@ -5545,8 +5765,12 @@
   "review.html",
   "ui.js"
  ],
+ "子项目 {0}": [
+  "streams.js"
+ ],
  "子项目 {1}": [
-  "report.js"
+  "report.js",
+  "streams.js"
  ],
  "子项目代码": [
   "overview.js"
@@ -5613,6 +5837,15 @@
  ],
  "它能识别的类别": [
   "flow.py"
+ ],
+ "宇视": [
+  "streams.py"
+ ],
+ "宇视会按规则自动拼地址": [
+  "streams.js"
+ ],
+ "宇视或任意 RTSP 摄像头": [
+  "streams.js"
  ],
  "安全监测": [
   "templates.js"
@@ -5713,6 +5946,20 @@
  "实时": [
   "inspect.js"
  ],
+ "实时检测": [
+  "streams.py"
+ ],
+ "实时画面": [
+  "streams.js"
+ ],
+ "实时监控": [
+  "app.js",
+  "streams.html",
+  "ui.js"
+ ],
+ "实时监控 · LOTA": [
+  "streams.html"
+ ],
  "实时看曲线": [
   "models.js"
  ],
@@ -5733,6 +5980,12 @@
  ],
  "宽（px）": [
   "datasets.js"
+ ],
+ "密码": [
+  "streams.js"
+ ],
+ "密码（可不填）": [
+  "streams.js"
  ],
  "对一张照片下复核结论": [
   "flow.py"
@@ -5780,6 +6033,12 @@
  "导入为**已复核**标注": [
   "flow.py"
  ],
+ "导入到": [
+  "streams.js"
+ ],
+ "导入到子项目图库": [
+  "streams.js"
+ ],
  "导入医学影像": [
   "flow.py",
   "guide.js",
@@ -5824,6 +6083,12 @@
   "app.js",
   "flow.py",
   "tools.py"
+ ],
+ "导入的是不带框的原图": [
+  "streams.js"
+ ],
+ "导入的是不带框的原图，进图库后照常送 Label Studio 标注、训练，模型会越来越准。": [
+  "streams.js"
  ],
  "导出": [
   "hub.py",
@@ -5882,7 +6147,8 @@
   "index.html"
  ],
  "小写字母": [
-  "overview.js"
+  "overview.js",
+  "streams.js"
  ],
  "小写字母、数字、短横线，如 pcb-defect": [
   "overview.js"
@@ -5931,6 +6197,9 @@
  ],
  "就减半": [
   "settings.js"
+ ],
+ "就报警截图": [
+  "streams.js"
  ],
  "就用 production": [
   "flow.py"
@@ -6123,7 +6392,11 @@
  ],
  "已保存": [
   "flow.html",
+  "streams.js",
   "workflow.js"
+ ],
+ "已停止播放": [
+  "streams.js"
  ],
  "已停用": [
   "app.js"
@@ -6147,13 +6420,17 @@
   "app.js",
   "catalog.py",
   "cleanup.py",
-  "phototypes.py"
+  "phototypes.py",
+  "streams.js"
  ],
  "已删除 / deleted": [
   "cleanup.py"
  ],
  "已删除 {0} 张": [
   "app.js"
+ ],
+ "已删除 {0} 条": [
+  "streams.js"
  ],
  "已删除，不再登记 / deleted": [
   "catalog.py"
@@ -6190,6 +6467,12 @@
   "developers.js",
   "models.js"
  ],
+ "已复制 {0} 张": [
+  "streams.js"
+ ],
+ "已复制 {0} 张，正在登记进图库…": [
+  "streams.js"
+ ],
  "已复核 {0} 张": [
   "app.js"
  ],
@@ -6222,6 +6505,12 @@
  ],
  "已导入": [
   "models.js"
+ ],
+ "已导入 {0} 张到": [
+  "streams.js"
+ ],
+ "已导入 {0} 张到「{1}」，可以去工作台送标注了": [
+  "streams.js"
  ],
  "已导出": [
   "models.js"
@@ -6293,6 +6582,9 @@
  "已改好": [
   "datasets.js"
  ],
+ "已断开": [
+  "streams.js"
+ ],
  "已暂停": [
   "app.js"
  ],
@@ -6307,6 +6599,9 @@
  ],
  "已有回收任务在排队": [
   "hub.py"
+ ],
+ "已有的报警截图会保留": [
+  "streams.js"
  ],
  "已有的杂草模型": [
   "flow.py"
@@ -6332,6 +6627,9 @@
  ],
  "已注册模型": [
   "flow.py"
+ ],
+ "已添加": [
+  "streams.js"
  ],
  "已生成模板": [
   "settings.js"
@@ -6515,6 +6813,9 @@
  "并回收进来的": [
   "datasets.js"
  ],
+ "并在": [
+  "streams.js"
+ ],
  "并把连接存进场景配置": [
   "app.js"
  ],
@@ -6580,6 +6881,12 @@
  "建过 SigLIP2 特征的": [
   "types.js"
  ],
+ "开了 AI 检测就要选一个子项目": [
+  "streams.py"
+ ],
+ "开了 AI 检测就要选一个子项目（用它的模型和质检规则）": [
+  "streams.py"
+ ],
  "开发者 API": [
   "app.js",
   "developers.js",
@@ -6589,6 +6896,18 @@
  ],
  "开启": [
   "flow.py"
+ ],
+ "开启 AI 后按子项目的模型和质检规则抽帧检测": [
+  "streams.js"
+ ],
+ "开启 AI 检测": [
+  "streams.js"
+ ],
+ "开启后服务器一直连着这路摄像头": [
+  "streams.js"
+ ],
+ "开启后服务器一直连着这路摄像头，不看画面也会检测、报警": [
+  "streams.js"
  ],
  "开启自动回收": [
   "guide.js",
@@ -6607,6 +6926,9 @@
  ],
  "开始抽帧": [
   "toolbox.js"
+ ],
+ "开始播放": [
+  "streams.js"
  ],
  "开始时先把 {0} 张已复核的标注打包成新版本": [
   "models.js"
@@ -6787,6 +7109,15 @@
  ],
  "当前阈值与人工一致率 <b>{0}%</b>（{1}/{2}）。": [
   "review.js"
+ ],
+ "录像机": [
+  "streams.js"
+ ],
+ "录像机填第几路": [
+  "streams.js"
+ ],
+ "录像机的 IP 地址或域名": [
+  "streams.py"
  ],
  "往往比加数据更管用": [
   "guide.js"
@@ -7062,10 +7393,17 @@
  ],
  "截图": [
   "flow.py",
+  "streams.js",
   "vlmcheck.py"
  ],
  "截图/文档": [
   "vlmcheck.py"
+ ],
+ "截图可以一键导入图库做训练数据": [
+  "streams.js"
+ ],
+ "截图已被清理": [
+  "streams.py"
  ],
  "所以没法提交": [
   "app.js"
@@ -7652,6 +7990,21 @@
  "报显存不足就选 8 或 4": [
   "models.js"
  ],
+ "报警": [
+  "streams.js"
+ ],
+ "报警截图": [
+  "streams.js"
+ ],
+ "报警截图按它归档": [
+  "streams.js"
+ ],
+ "报警间隔": [
+  "streams.js"
+ ],
+ "报警间隔（秒）": [
+  "streams.js"
+ ],
  "抽 20 张": [
   "flow.py"
  ],
@@ -7937,7 +8290,8 @@
  ],
  "换一个": [
   "learning.py",
-  "models.js"
+  "models.js",
+  "streams.py"
  ],
  "换一个数会抽到另一批": [
   "flow.py"
@@ -7986,6 +8340,15 @@
  ],
  "接下载器": [
   "developers.js"
+ ],
+ "接入方式": [
+  "streams.js"
+ ],
+ "接入海康": [
+  "streams.js"
+ ],
+ "接入海康、大华、宇视或任意 RTSP 摄像头 / 录像机：网页实时看画面；开启 AI 后按子项目的模型和质检规则抽帧检测，命中就报警并截图存证，截图可以一键导入图库做训练数据。": [
+  "streams.js"
  ],
  "接口": [
   "developers.js"
@@ -8066,6 +8429,7 @@
   "guide.js",
   "models.js",
   "settings.js",
+  "streams.js",
   "toolbox.js",
   "types.js"
  ],
@@ -8149,6 +8513,18 @@
  "搜索节点名…": [
   "flow.js"
  ],
+ "摄像头编号 {0} 已存在": [
+  "streams.py"
+ ],
+ "摄像头编号 {0} 已存在，换一个": [
+  "streams.py"
+ ],
+ "摄像头编号不能改": [
+  "streams.py"
+ ],
+ "摄像头编号不能改；要换编号请删掉重建": [
+  "streams.py"
+ ],
  "摔倒": [
   "templates.js"
  ],
@@ -8179,6 +8555,12 @@
  ],
  "支持 mp4 / mov / avi / mkv；也可以把视频放到服务器上引擎允许读的任意目录": [
   "toolbox.js"
+ ],
+ "支持 rtsp": [
+  "streams.js"
+ ],
+ "支持 rtsp:// rtsps:// rtmp:// http(s):// srt://；账号密码可以写在地址里，也可以填在下面两格": [
+  "streams.js"
  ],
  "支持 {1}": [
   "hub.py"
@@ -8249,6 +8631,7 @@
   "hub.py",
   "models.js",
   "overview.js",
+  "streams.js",
   "types.js"
  ],
  "数字和短横线": [
@@ -8765,6 +9148,7 @@
   "inspect.js",
   "overview.js",
   "report.js",
+  "streams.js",
   "toolbox.js",
   "ui.js"
  ],
@@ -8843,6 +9227,9 @@
  ],
  "最多 1000": [
   "flow.py"
+ ],
+ "最多 12 秒": [
+  "streams.js"
  ],
  "最多 120 帧": [
   "models.js"
@@ -8947,6 +9334,9 @@
  ],
  "最近": [
   "report.js"
+ ],
+ "最近 200 条": [
+  "streams.js"
  ],
  "最近 2000 条质检记录里": [
   "overview.js"
@@ -9072,6 +9462,9 @@
  "服务器绝对路径": [
   "app.js"
  ],
+ "服务器能不能 ping 到摄像头": [
+  "streams.py"
+ ],
  "服务器路径": [
   "developers.js",
   "flow.py"
@@ -9091,6 +9484,9 @@
  "未命中图片": [
   "flow.py"
  ],
+ "未开启": [
+  "streams.js"
+ ],
  "未知": [
   "app.js"
  ],
@@ -9105,7 +9501,8 @@
   "models.js"
  ],
  "未连接": [
-  "overview.js"
+  "overview.js",
+  "streams.js"
  ],
  "未连接时使用工作台选中图片": [
   "workflow.js"
@@ -9585,8 +9982,17 @@
  "框高": [
   "datasets.js"
  ],
+ "检出 {0} 个目标": [
+  "streams.js"
+ ],
+ "检出 {0} 个目标 · 子项目 {1}": [
+  "streams.js"
+ ],
  "检查": [
   "overview.js"
+ ],
+ "检查 IP": [
+  "streams.py"
  ],
  "检查中…": [
   "datasets.js"
@@ -9621,6 +10027,9 @@
  "检查画质并标记": [
   "flow.py",
   "tools.py"
+ ],
+ "检查网络是否通": [
+  "streams.py"
  ],
  "检测": [
   "datasets.js",
@@ -9733,6 +10142,9 @@
  ],
  "模型会": [
   "datasets.js"
+ ],
+ "模型会越来越准": [
+  "streams.js"
  ],
  "模型列表": [
   "developers.js"
@@ -9923,14 +10335,21 @@
  "正在加载原图…": [
   "app.js"
  ],
+ "正在登记进图库…": [
+  "streams.js"
+ ],
  "正在自动启动…": [
   "flow.js"
  ],
  "正在运行": [
   "flow.html"
  ],
+ "正在重连…": [
+  "streams.py"
+ ],
  "正常": [
-  "datasets.js"
+  "datasets.js",
+  "streams.js"
  ],
  "正常拍照设 0": [
   "settings.js"
@@ -9979,7 +10398,8 @@
   "models.js"
  ],
  "每 {1} 秒一帧": [
-  "models.js"
+  "models.js",
+  "streams.js"
  ],
  "每一步都可以在工作流里一键跑": [
   "overview.js"
@@ -10145,6 +10565,9 @@
  "每隔几秒抽一帧": [
   "toolbox.js"
  ],
+ "每隔几秒检测一帧": [
+  "streams.js"
+ ],
  "比例": [
   "hub.py"
  ],
@@ -10245,6 +10668,9 @@
  "没有匹配的选项": [
   "combo.js"
  ],
+ "没有可导入的": [
+  "streams.py"
+ ],
  "没有可抽的新图片": [
   "flow.py"
  ],
@@ -10308,6 +10734,12 @@
  "没有规则": [
   "overview.js"
  ],
+ "没有规则时用的模型": [
+  "streams.js"
+ ],
+ "没有规则时画框用": [
+  "streams.js"
+ ],
  "没有读到 DICOM 图像": [
   "media.py"
  ],
@@ -10323,11 +10755,20 @@
  "没有这个上传（可能已过期，请重新上传）": [
   "hub.py"
  ],
+ "没有这个摄像头": [
+  "streams.py"
+ ],
+ "没有这个摄像头：{0}": [
+  "streams.py"
+ ],
  "没有这个照片类型": [
   "phototypes.py"
  ],
  "没有这个照片类型：{0}": [
   "phototypes.py"
+ ],
+ "没有这条报警": [
+  "streams.py"
  ],
  "没有选照片": [
   "phototypes.py"
@@ -10408,6 +10849,15 @@
  "浏览器访问地址": [
   "settings.js"
  ],
+ "海康": [
+  "streams.js"
+ ],
+ "海康、大华、宇视会按规则自动拼地址": [
+  "streams.js"
+ ],
+ "海康威视": [
+  "streams.py"
+ ],
  "混合": [
   "settings.js"
  ],
@@ -10425,6 +10875,12 @@
  ],
  "混淆矩阵（数量）": [
   "hub.py"
+ ],
+ "添加": [
+  "streams.js"
+ ],
+ "添加摄像头": [
+  "streams.js"
  ],
  "添加来源": [
   "app.js"
@@ -10523,8 +10979,17 @@
  "点不要太稀": [
   "hub.py"
  ],
+ "点击": [
+  "streams.js"
+ ],
+ "点击「看画面」开始播放": [
+  "streams.js"
+ ],
  "点击在新版里打开": [
   "workflow.js"
+ ],
+ "点击放大": [
+  "streams.js"
  ],
  "点击目标节点输入端口": [
   "workflow.js"
@@ -10540,7 +11005,11 @@
  ],
  "点右上角": [
   "guide.js",
-  "inspect.js"
+  "inspect.js",
+  "streams.js"
+ ],
+ "点右上角「添加摄像头」，填 IP、账号密码即可；海康、大华会自动拼好取流地址。": [
+  "streams.js"
  ],
  "点图放大": [
   "review.html"
@@ -10637,6 +11106,7 @@
   "flow.py",
   "inspect.js",
   "report.js",
+  "streams.js",
   "types.html",
   "types.js",
   "ui.js"
@@ -10701,7 +11171,11 @@
   "hub.py"
  ],
  "版本名或别名": [
-  "flow.py"
+  "flow.py",
+  "streams.js"
+ ],
+ "版本名或别名，如 production": [
+  "streams.js"
  ],
  "版本名自动生成": [
   "settings.js"
@@ -10851,6 +11325,9 @@
  "用哪个 YOLO 权重来找，检测模型、分类模型都行。选中节点后，右侧说明里会列出它能识别的类别": [
   "flow.py"
  ],
+ "用哪个子项目": [
+  "streams.js"
+ ],
  "用哪个已训练好的分类器来归类": [
   "app.js"
  ],
@@ -10902,6 +11379,12 @@
  "用多边形沿目标边缘描一圈，点不要太稀（拐角处多点几个）": [
   "hub.py"
  ],
+ "用它的模型和质检规则": [
+  "streams.py"
+ ],
+ "用它的正式模型和质检规则": [
+  "streams.js"
+ ],
  "用它训练": [
   "datasets.js"
  ],
@@ -10916,6 +11399,12 @@
  ],
  "用当前正式模型预先画框": [
   "flow.py"
+ ],
+ "用户名": [
+  "streams.js"
+ ],
+ "用户名（可不填）": [
+  "streams.js"
  ],
  "用接口调用": [
   "toolbox.js"
@@ -10940,6 +11429,9 @@
  ],
  "用时 {0} 秒 · {1}": [
   "m.js"
+ ],
+ "用时 {2} 毫秒": [
+  "streams.js"
  ],
  "用服务器本机的视觉大模型": [
   "flow.py"
@@ -11089,11 +11581,26 @@
   "app.js",
   "templates.js"
  ],
+ "画面上的框是最近一次 AI 检测的结果": [
+  "streams.js"
+ ],
+ "画面上的框是最近一次 AI 检测的结果。": [
+  "streams.js"
+ ],
  "画面变化慢": [
   "toolbox.js"
  ],
  "画面变化慢（固定机位）用 2–5 秒；巡检走动拍摄用 0.5–1 秒": [
   "toolbox.js"
+ ],
+ "画面断了": [
+  "streams.py"
+ ],
+ "画面断了，正在重连…": [
+  "streams.py"
+ ],
+ "画面编码失败": [
+  "streams.py"
  ],
  "画预框": [
   "guide.js"
@@ -11336,6 +11843,9 @@
  "直接分析": [
   "models.js"
  ],
+ "直接填地址": [
+  "streams.py"
+ ],
  "直接用 SigLIP2 按场景类别名猜每张图是什么类型": [
   "flow.py"
  ],
@@ -11344,6 +11854,15 @@
  ],
  "直接选 No target": [
   "hub.py"
+ ],
+ "直播中": [
+  "streams.js"
+ ],
+ "直连摄像头填 1": [
+  "streams.js"
+ ],
+ "直连摄像头填 1；录像机填第几路": [
+  "streams.js"
  ],
  "相似 {0}": [
   "types.js"
@@ -11362,6 +11881,9 @@
  ],
  "相差不到 2 分": [
   "models.js"
+ ],
+ "省带宽": [
+  "streams.js"
  ],
  "省时间": [
   "settings.js"
@@ -11408,6 +11930,9 @@
  "看清阴影里的细节": [
   "media.py"
  ],
+ "看画面": [
+  "streams.js"
+ ],
  "看看 demo 现在的正式模型成绩": [
   "developers.js"
  ],
@@ -11430,6 +11955,9 @@
  ],
  "短路": [
   "templates.js"
+ ],
+ "码流": [
+  "streams.js"
  ],
  "确定": [
   "app.js",
@@ -11495,6 +12023,12 @@
  "确认错了的话": [
   "app.js"
  ],
+ "票据无效或已过期": [
+  "streams.py"
+ ],
+ "票据无效或已过期，刷新页面重试": [
+  "streams.py"
+ ],
  "积水": [
   "models.js"
  ],
@@ -11534,6 +12068,9 @@
  ],
  "稍后再看": [
   "datasets.js"
+ ],
+ "稍后再试": [
+  "streams.py"
  ],
  "稍后到": [
   "app.js"
@@ -11659,6 +12196,10 @@
  ],
  "端侧": [
   "settings.js"
+ ],
+ "端口": [
+  "streams.js",
+  "streams.py"
  ],
  "端子": [
   "media.py"
@@ -12094,6 +12635,12 @@
  "综合得分 {1}": [
   "models.js"
  ],
+ "编号": [
+  "streams.js"
+ ],
+ "编号不能改": [
+  "streams.js"
+ ],
  "编辑": [
   "inspect.js"
  ],
@@ -12146,11 +12693,15 @@
  "网页上看带框的图": [
   "flow.py"
  ],
+ "网页实时看画面": [
+  "streams.js"
+ ],
  "网页常用": [
   "developers.js"
  ],
  "置信度下限": [
-  "flow.py"
+  "flow.py",
+  "streams.js"
  ],
  "置信度接近 0.5": [
   "flow.py"
@@ -12466,6 +13017,9 @@
  "要带模型预框请用": [
   "flow.py"
  ],
+ "要换编号请删掉重建": [
+  "streams.py"
+ ],
  "要更快可 480": [
   "flow.py",
   "settings.js"
@@ -12553,6 +13107,9 @@
  "规则名称": [
   "inspect.js"
  ],
+ "规则在": [
+  "streams.js"
+ ],
  "规则已保存": [
   "inspect.js"
  ],
@@ -12566,7 +13123,8 @@
   "backends_tv.py"
  ],
  "视觉大模型没回应": [
-  "agent.py"
+  "agent.py",
+  "streams.py"
  ],
  "视觉大模型说明": [
   "developers.js",
@@ -12680,6 +13238,7 @@
   "guide.js",
   "models.js",
   "overview.js",
+  "streams.js",
   "toolbox.js",
   "ui.js"
  ],
@@ -12969,7 +13528,11 @@
  ],
  "设置": [
   "developers.js",
-  "overview.js"
+  "overview.js",
+  "streams.js"
+ ],
+ "设置 · {0}": [
+  "streams.js"
  ],
  "设置已保存": [
   "settings.js"
@@ -13056,6 +13619,9 @@
  "试一试都能直接用": [
   "flow.py"
  ],
+ "试试换主码流": [
+  "streams.py"
+ ],
  "该找的找到了多少": [
   "models.js"
  ],
@@ -13133,6 +13699,15 @@
  ],
  "请填写任务代码和名称": [
   "tasks-ui.js"
+ ],
+ "请填摄像头": [
+  "streams.py"
+ ],
+ "请填摄像头 / 录像机的 IP 地址或域名": [
+  "streams.py"
+ ],
+ "请填编号": [
+  "streams.js"
  ],
  "请手动选中复制": [
   "models.js"
@@ -13283,6 +13858,15 @@
  "负样本": [
   "datasets.js"
  ],
+ "账号密码": [
+  "streams.py"
+ ],
+ "账号密码即可": [
+  "streams.js"
+ ],
+ "账号密码可以写在地址里": [
+  "streams.js"
+ ],
  "质检": [
   "flow.py",
   "guide.js",
@@ -13299,7 +13883,8 @@
  ],
  "质检规则": [
   "inspect.js",
-  "overview.js"
+  "overview.js",
+  "streams.js"
  ],
  "质检记录": [
   "inspect.js"
@@ -13388,6 +13973,12 @@
  ],
  "越小越严格，6 左右合适": [
   "flow.py"
+ ],
+ "越小越及时": [
+  "streams.js"
+ ],
+ "越小越及时，也越占显卡；一般 1–2 秒": [
+  "streams.js"
  ],
  "越高目标越多": [
   "models.js"
@@ -13607,6 +14198,12 @@
  "还没打包数据集": [
   "hub.py"
  ],
+ "还没拿到画面": [
+  "streams.py"
+ ],
+ "还没拿到画面，稍后再试": [
+  "streams.py"
+ ],
  "还没有": [
   "datasets.js",
   "hub.py",
@@ -13659,6 +14256,18 @@
  ],
  "还没有报告。在上面任一数据集版本点「找标注错误」。": [
   "datasets.js"
+ ],
+ "还没有报警": [
+  "streams.js"
+ ],
+ "还没有报警。开启 AI 检测、并在「智能质检」页配好规则后，命中的画面会出现在这里。": [
+  "streams.js"
+ ],
+ "还没有摄像头": [
+  "streams.js"
+ ],
+ "还没有摄像头。": [
+  "streams.js"
  ],
  "还没有数据集": [
   "datasets.js",
@@ -13773,6 +14382,12 @@
  "这个子项目还没有复核单：在工作流里运行“覆盖率判定”节点会生成。": [
   "review.js"
  ],
+ "这个子项目还没有质检规则": [
+  "streams.js"
+ ],
+ "这个子项目还没有质检规则：只用下面的模型画框，不会报警。规则在「智能质检」页配置。": [
+  "streams.js"
+ ],
  "这个子项目还没连接 Label Studio": [
   "hub.py"
  ],
@@ -13884,6 +14499,9 @@
  "这里给自动化用": [
   "flow.py"
  ],
+ "进图库后照常送 Label Studio 标注": [
+  "streams.js"
+ ],
  "远处的螺丝": [
   "settings.js"
  ],
@@ -13897,8 +14515,15 @@
  "远近变化大时调大。默认 0.5": [
   "settings.js"
  ],
+ "连上了但读不到画面": [
+  "streams.py"
+ ],
+ "连上了但读不到画面：试试换主码流 / 子码流或通道号": [
+  "streams.py"
+ ],
  "连不上": [
-  "overview.js"
+  "overview.js",
+  "streams.py"
  ],
  "连不上 Ollama": [
   "vlmcheck.py"
@@ -13906,8 +14531,17 @@
  "连不上 Ollama（{0}）：确认服务器上 Ollama 在运行": [
   "vlmcheck.py"
  ],
+ "连不上摄像头": [
+  "streams.py"
+ ],
+ "连不上摄像头，{0} 秒后重试": [
+  "streams.py"
+ ],
  "连不上：": [
   "overview.js"
+ ],
+ "连不上：检查 IP、端口、账号密码，以及摄像头是否开了 RTSP": [
+  "streams.py"
  ],
  "连了": [
   "flow.py"
@@ -13928,6 +14562,15 @@
   "flow.py",
   "hub.py",
   "overview.js"
+ ],
+ "连接中": [
+  "streams.js"
+ ],
+ "连接中…": [
+  "streams.js"
+ ],
+ "连接中…（最多 12 秒）": [
+  "streams.js"
  ],
  "连接工作台": [
   "app.js"
@@ -14060,6 +14703,12 @@
  "选中本页": [
   "app.js"
  ],
+ "选中的报警截图都已被清理": [
+  "streams.py"
+ ],
+ "选中的报警截图都已被清理，没有可导入的": [
+  "streams.py"
+ ],
  "选中节点后": [
   "flow.py"
  ],
@@ -14135,6 +14784,9 @@
  ],
  "通过 {0} 张，不通过 {1} 张": [
   "flow.js"
+ ],
+ "通道号": [
+  "streams.js"
  ],
  "速度和准确度兼顾": [
   "models.js"
@@ -14376,6 +15028,9 @@
  "防止": [
   "settings.js"
  ],
+ "防止刷屏": [
+  "streams.js"
+ ],
  "防过拟合": [
   "settings.js"
  ],
@@ -14448,7 +15103,8 @@
   "flow.py",
   "inspect.js",
   "m.js",
-  "report.js"
+  "report.js",
+  "streams.js"
  ],
  "需注意 {1}": [
   "overview.js"
@@ -14520,6 +15176,12 @@
  ],
  "页调整": [
   "report.js"
+ ],
+ "页配好规则后": [
+  "streams.js"
+ ],
+ "页配置": [
+  "streams.js"
  ],
  "页配置的规则判定合格": [
   "developers.js"
@@ -14692,6 +15354,9 @@
  "高 ISO 夜拍噪点多（较慢）": [
   "media.py"
  ],
+ "高清": [
+  "streams.js"
+ ],
  "高清大图里的小目标": [
   "inspect.js",
   "models.js"
@@ -14846,7 +15511,8 @@
   "m.js"
  ],
  "（视觉大模型没回应：{0}）": [
-  "agent.py"
+  "agent.py",
+  "streams.py"
  ],
  "（请选择）": [
   "flow.js"
@@ -14878,6 +15544,9 @@
  ],
  "＋ 新建规则": [
   "inspect.js"
+ ],
+ "＋ 添加摄像头": [
+  "streams.js"
  ],
  "＋ 空白子项目": [
   "overview.js"
@@ -14957,11 +15626,20 @@
  "📱 把模型放到手机上": [
   "guide.js"
  ],
+ "📷 截图": [
+  "streams.js"
+ ],
+ "📹 实时监控": [
+  "streams.js"
+ ],
  "🔁 边标注边训练": [
   "guide.js"
  ],
  "🔁 边标注边训练（主动学习）": [
   "guide.js"
+ ],
+ "🔌 测试连接": [
+  "streams.js"
  ],
  "🔍 找相似图": [
   "types.js"
@@ -15002,6 +15680,15 @@
  ],
  "🛡️ 让 AI 自动审核照片": [
   "guide.js"
+ ],
+ "🤖 AI 检测": [
+  "streams.js"
+ ],
+ "🤖 AI 检测：子项目 {0}，每 {1} 秒一帧": [
+  "streams.js"
+ ],
+ "🤖 AI 检测：未开启": [
+  "streams.js"
  ],
  "🤖 给 Agent / Claude 用": [
   "guide.js"

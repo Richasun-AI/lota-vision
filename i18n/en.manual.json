@@ -145,5 +145,10 @@
  "主动学习每轮会更新": "Updated every active-learning round",
  "数据集 {0} 个": "{0} datasets",
  "综合得分（mAP50）": "Overall score (mAP50)",
- "类别编辑器": "Class editor"
+ "类别编辑器": "Class editor",
+ "海康威视": "Hikvision",
+ "大华": "Dahua",
+ "宇视": "Uniview",
+ "📹 实时监控": "📹 Live Monitoring",
+ "实时监控": "Live Monitoring"
 }
