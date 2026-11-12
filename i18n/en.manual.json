@@ -271,5 +271,8 @@
  "这些照片不再建议成本类型（不改它们现在的类型）": "Stop suggesting this type for these photos (their current type is unchanged)",
  "已忽略 {0} 张的建议": "Dismissed suggestions for {0} photos",
  "权重 {0} 检出 {1}；现在归在：{2}": "Weights {0} detected {1}; currently in: {2}",
- "权重 {0} 检出 {1}": "Weights {0} detected {1}"
+ "权重 {0} 检出 {1}": "Weights {0} detected {1}",
+ "未排除的（默认）": "Not excluded (default)",
+ "全部（含已排除）": "All (incl. excluded)",
+ "已排除（默认不显示）": "Excluded (hidden by default)"
 }

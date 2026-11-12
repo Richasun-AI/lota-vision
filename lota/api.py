@@ -133,10 +133,10 @@ def create_app(home, source_roots=(), weights_roots=(), token=None):
         return catalog.near_duplicates(directory(project_id), image_id, limit=limit)
 
     @router.get("/projects/{project_id}/sorting")
-    def sorting_results(project_id: str, category: str | None = None,
+    def sorting_results(project_id: str, category: str | None = None, exclude_rejected: bool = False,
                         limit: int = Query(100, ge=1, le=200), offset: int = Query(0, ge=0)):
         from .sorting import results
-        return results(directory(project_id), category, limit, offset)
+        return results(directory(project_id), category, limit, offset, exclude_rejected)
 
     def task_directory(project_id,annotation_task):
         from .tasks import scoped
@@ -219,20 +219,25 @@ def create_app(home, source_roots=(), weights_roots=(), token=None):
     static = Path(__file__).parent / "static"
     app.mount("/static", StaticFiles(directory=static, check_dir=False), name="static")
 
+    # 页面本身每次都向服务器确认有没有更新（没变返回 304，很快）：否则浏览器缓存旧页面，
+    # 页面里引用的 app.js?v=… 新版本号就不生效，更新后还在跑旧代码
+    def html(name):
+        return FileResponse(static / f"{name}.html", headers={"Cache-Control": "no-cache"})
+
     @app.get("/", include_in_schema=False)
     def workbench():
-        return FileResponse(static / "index.html")
+        return html("index")
 
     @app.get("/flow", include_in_schema=False)
     def flow_page():
-        return FileResponse(static / "flow.html")
+        return html("flow")
 
     @app.get("/review", include_in_schema=False)
     def review_page():
-        return FileResponse(static / "review.html")
+        return html("review")
 
     for _page in ("models", "datasets", "settings", "developers", "inspect", "toolbox", "overview", "guide", "report", "types", "m", "streams"):  # 产品页面（模型中心、数据集、项目设置、开发者 API）
-        app.add_api_route(f"/{_page}", (lambda name: (lambda: FileResponse(static / f"{name}.html")))(_page),
+        app.add_api_route(f"/{_page}", (lambda name: (lambda: html(name)))(_page),
                           methods=["GET"], include_in_schema=False)
 
     return app

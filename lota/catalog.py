@@ -575,6 +575,8 @@ def list_images(
     params = []
     if status in {"extracted", "copied"}:
         filters.append("raw_relpath IS NOT NULL")
+    elif status == "active":   # 图库默认：不显示已排除的
+        filters.append("status<>'rejected'")
     elif status:
         if status not in _DECISIONS:
             raise ValueError("Unknown image status")

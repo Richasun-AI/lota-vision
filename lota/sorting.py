@@ -55,14 +55,19 @@ def classify(c,image_ids,hints_path=None,model_dir=None):
     return {"image_ids":image_ids,"categories":dict(Counter(x["category"] for x in items)),"items":items,
             "notice":"类型为待复核候选；未知图片可配置分类模型后重新运行。"}
 
-def results(directory,category=None,limit=100,offset=0):
+def results(directory,category=None,limit=100,offset=0,exclude_rejected=False):
     path=directory/"catalog/sorting.sqlite3"
     if not path.exists(): return {"categories":{},"items":[]}
     with closing(sqlite3.connect(path)) as db:
-        counts=dict(db.execute("SELECT category,COUNT(*) FROM results GROUP BY category"))
-        query="SELECT image_id,payload FROM results"
-        args=[]
-        if category: query+=" WHERE category=?";args.append(category)
+        where,args=[],[]
+        catalog=directory/"catalog/catalog.sqlite3"
+        if exclude_rejected and catalog.exists():   # 已排除的照片不算数、不列出
+            db.execute("ATTACH DATABASE ? AS cat",(str(catalog),))
+            where.append("image_id NOT IN (SELECT image_id FROM cat.images WHERE status='rejected')")
+        base=" WHERE "+" AND ".join(where) if where else ""
+        counts=dict(db.execute("SELECT category,COUNT(*) FROM results"+base+" GROUP BY category"))
+        query="SELECT image_id,payload FROM results"+base
+        if category: query+=(" AND" if where else " WHERE")+" category=?";args.append(category)
         query+=" ORDER BY image_id LIMIT ? OFFSET ?";args.extend([limit,offset])
         items=[]
         for key,payload in db.execute(query,args):

@@ -495,8 +495,8 @@ async function selectAllInRange(project = state.project) {
   for (let offset = 0; ids.length < SELECT_ALL_MAX; offset += 200) {
     const q = new URLSearchParams({limit: "200", offset: String(offset)});
     let rows;
-    if (r.usingSorting) { if (r.category) q.set("category", r.category); rows = (await request(pathFor(project) + "/sorting?" + q)).items || []; }
-    else { if (r.status) q.set("status", r.status); if (r.checkpoint) q.set("checkpoint", r.checkpoint); rows = await request(pathFor(project) + "/images?" + q); }
+    if (r.usingSorting) { if (r.category) q.set("category", r.category); if (!r.status) q.set("exclude_rejected", "true"); rows = (await request(pathFor(project) + "/sorting?" + q)).items || []; }
+    else { q.set("status", !r.status ? "active" : r.status === "all" ? "" : r.status); if (!q.get("status")) q.delete("status"); if (r.checkpoint) q.set("checkpoint", r.checkpoint); rows = await request(pathFor(project) + "/images?" + q); }
     ids.push(...rows.map((x) => x.image_id));
     if (rows.length < 200) break;
   }
@@ -576,21 +576,25 @@ function confirmExtract(project = state.project) {
 async function galleryPage() {
   const project = state.project;
   const query = new URLSearchParams({limit: String(perPage), offset: String(state.offset)});
-  if (state.status) query.set("status", state.status);
+  // 复核状态：空 = 默认不显示已排除的；all = 全部（含已排除）
+  if (state.status && state.status !== "all") query.set("status", state.status);
+  else if (!state.status) query.set("status", "active");
   if (state.checkpoint) query.set("checkpoint", state.checkpoint);
   const sortQuery=new URLSearchParams({limit:String(perPage),offset:String(state.offset)});
   if(state.category)sortQuery.set("category",state.category);
+  if(!state.status)sortQuery.set("exclude_rejected","true");
   const [stats, originalImages, sorting] = await Promise.all([request(pathFor(project) + "/stats"), request(pathFor(project) + "/images?" + query),request(pathFor(project)+"/sorting?"+sortQuery)]);
-  const usingSorting=!!Object.keys(sorting.categories).length&&!state.status&&!state.checkpoint;
+  // 选了某个自动分类才按分拣结果列；默认列全部原图（没有分拣结果的图也要看得到）
+  const usingSorting=!!state.category&&(!state.status||state.status==="all")&&!state.checkpoint;
   const images=usingSorting?sorting.items:originalImages;
   // 当前筛选范围一共多少张（按检查点筛选时算不出总数，只能逐页翻）
   let total=null;
   if(usingSorting)total=state.category?(sorting.categories[state.category]||0):Object.values(sorting.categories).reduce((a,b)=>a+b,0);
-  else if(!state.checkpoint)total=!state.status?stats.total:state.status==="extracted"?stats.extracted:(stats.review||{})[state.status]??null;
+  else if(!state.checkpoint)total=state.status==="all"?stats.total:!state.status?stats.total-((stats.review||{}).rejected||0):state.status==="extracted"?stats.extracted:(stats.review||{})[state.status]??null;
   state.galleryRange={usingSorting,category:state.category||"",status:state.status||"",checkpoint:state.checkpoint||"",total};
   if (project !== state.project) return document.createDocumentFragment();
   state.images = images;
-  const status = select([["", "全部复核状态"], ["pending", "待复核"], ["accepted", "已确认"],
+  const status = select([["", "未排除的（默认）"], ["all", "全部（含已排除）"], ["pending", "待复核"], ["accepted", "已确认"],
     ["rejected", "已排除"], ["extracted", "已抽取"]], state.status, {class: "filter", "aria-label": "复核状态"});
   const checkpoint = textInput(state.checkpoint, {class: "filter", placeholder: "输入检查点", "aria-label": "检查点筛选"});
   const category=select([["","全部自动分类"],...Object.entries(sorting.categories).map(([key,count])=>[key,categoryLabel(key,project.config)+" ("+count+")"])],state.category||"");
@@ -634,7 +638,7 @@ async function galleryPage() {
   return h("div", {},
     page("原图与分拣", "按站点和检查点复核样本，选中后抽取到当前场景。", h("div", {class: "actions"},
       button("刷新", () => navigate("gallery")), button("扫描原图", () => toolDialog("catalog.scan"), "primary", {disabled: !project.active}))),
-    h("div", {class: "metrics"}, stat("内容去重后", stats.total), stat("待复核", stats.review?.pending),
+    h("div", {class: "metrics"}, stat("内容去重后", stats.total), stat("待复核", stats.review?.pending), stat("已排除（默认不显示）", stats.review?.rejected),
       stat("已抽取", stats.extracted), stat("来源路径", Object.values(stats.sources || {}).reduce((sum, x) => sum + x, 0))),
     panel(h("strong", {}, "选图步骤"),
       h("p", {}, "先运行自动分拣，再按类型复核并抽取图片。"),
