@@ -14,15 +14,23 @@ async function categoryEditor(){
   const controls={code:textInput(code,{readOnly:existing}),name:textInput(definition.name||""),
    english:textInput(definition.name_en||""),description:textInput(definition.description||""),
    enabled:h("input",{type:"checkbox",checked:definition.enabled!==false})};
+  const inModel=existing&&config.classes.includes(code),photos=existing?(seen.categories[code]||0):0;
+  const entry={controls};
+  const remove=button("删除",()=>{
+   if(inModel){UI.toast("“"+code+"”是当前模型训练类别，不能删除；不想用可取消“启用”",true);return;}
+   if(photos){UI.toast("“"+code+"”已有 "+photos+" 张分拣照片，不能删除；不想用可取消“启用”",true);return;}
+   if(existing&&!confirm("删除类别“"+(controls.name.value||code)+"”？点“保存类别”后生效"))return;
+   rows.splice(rows.indexOf(entry),1);row.remove();
+  });
   const row=h("div",{class:"panel category-row"},h("div",{class:"form-grid"},
    field("稳定代码",controls.code),field("中文名称",controls.name),field("英文名称",controls.english),
    field("说明",controls.description),field("启用",controls.enabled)),
-   h("small",{},config.classes.includes(code)?"当前模型训练类别":"照片分拣类别"));
-  rows.push({controls,row});list.append(row);
+   h("div",{class:"actions"},h("small",{},inModel?"当前模型训练类别":"照片分拣类别"+(photos?" · "+photos+" 张":"")),remove));
+  entry.row=row;rows.push(entry);list.append(row);
  }
  codes.forEach(code=>add(code,definitions[code]||{},true));
  search.oninput=()=>rows.forEach(({controls,row})=>row.hidden=![controls.code.value,controls.name.value,controls.english.value].join(" ").toLowerCase().includes(search.value.toLowerCase()));
- body.append(h("p",{},"类别属于当前子项目场景。已有代码保持稳定，修改名称会更新图库显示；停用类别仍保留历史记录。"),
+ body.append(h("p",{},"类别属于当前子项目场景。已有代码保持稳定，修改名称会更新图库显示；停用类别仍保留历史记录。没用过的类别可以删除；模型训练类别和已有分拣照片的类别只能停用。"),
  search,h("div",{class:"actions"},button("新增类别",()=>add()),
  button("导入标准照片类型（中英）",asyncClick(async()=>{
   const std=await fetch("/static/standard_categories.json").then(r=>r.ok?r.json():{}).catch(()=>({}));if(!Object.keys(std).length){UI.toast("没有标准照片类型清单（static/standard_categories.json）",true);return;}

@@ -362,8 +362,18 @@ def register_routes(router, engine, directory):
 
 
 # ── 总览：所有子项目的状态 + Label Studio 协同进度 + 下一步建议 ─────────────────────
-def ls_status(directory, cfg):
-    """Label Studio 项目进度：任务数、已标注数；以及引擎从 LS 回收了多少"""
+def ls_config_check(label_config, classes, task="detect"):
+    """Label Studio 项目的标注配置够不够用：每个类别都有对应标签（大小写、空格/下划线不敏感），有“Targets reviewed”确认选项"""
+    import re
+    from .labels import _class_name
+    labels = re.findall(r'<(?:Label|Choice)\s[^>]*?value="([^"]+)"', label_config or "")
+    have = {_class_name([x], classes) for x in labels} - {None}
+    review = "Category reviewed" if task == "classify" else "Targets reviewed"
+    return {"missing_classes": [c for c in classes if c not in have], "has_review_choice": review in labels}
+
+
+def ls_status(directory, cfg, classes=None, task="detect"):
+    """Label Studio 项目进度：任务数、已标注数；以及引擎从 LS 回收了多少（给了 classes 时再检查标注配置）"""
     if not cfg or not cfg.get("project_id"):
         return None
     out = {"project_id": cfg["project_id"]}
@@ -373,6 +383,8 @@ def ls_status(directory, cfg):
         cli.timeout = 4
         p = cli._request("GET", f"/api/projects/{cfg['project_id']}")
         out.update(title=p.get("title"), tasks=p.get("task_number") or 0, annotated=p.get("num_tasks_with_annotations") or 0)
+        if classes:
+            out["config"] = ls_config_check(p.get("label_config"), list(classes), task)
         try:
             hooks = cli._request("GET", "/api/webhooks", query={"project": cfg["project_id"]}) or []
             out["auto_pull"] = any("/api/hooks/label-studio" in str(w.get("url", "")) and w.get("is_active", True) for w in hooks)
@@ -426,6 +438,21 @@ def suggestions(pid, cfg, s, ls, pipes, ms):
 
 
 def register_overview(router, engine, directory):
+    @router.get("/projects/{project_id}/hub/ls-status", tags=["hub"])
+    def project_ls_status(project_id: str):
+        """标注系统页用：本子项目的 Label Studio 进度（任务数、已标注、引擎已回收、自动回收开没开）"""
+        d = directory(project_id)
+        conf = engine.store.project(project_id)["config"]
+        cfg = conf.get("label_studio")
+        ls = ls_status(d, cfg, conf.get("classes"), conf.get("task", "detect"))
+        if ls and ls.get("project_id"):
+            ls["url"] = f"{load_settings(d)['label_studio']['public_url'].rstrip('/')}/projects/{ls['project_id']}/data"
+        from .flow import rereview_candidates
+        cands = rereview_candidates(d, conf.get("task", "detect"), conf.get("classes") or [])
+        review = {"stale": sum(1 for v in cands.values() if v[0] == "stale"),
+                  "rejected": sum(1 for v in cands.values() if v[0] == "rejected")}
+        return {"connected": bool(ls), **(ls or {}), "classes": conf.get("classes"), "needs_review": review}
+
     @router.get("/overview", tags=["hub"])
     def overview():
         from .agent import load_pipelines, recent_inspections

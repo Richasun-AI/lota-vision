@@ -28,6 +28,10 @@ def summary():
     eff = ei.effective_types()
     conf = ei.confirmed_labels()
     pred = ei.load_pred()
+    from .typesuggest import load_suggestions
+    suggested = {}
+    for d in load_suggestions(ei, hf).values():
+        suggested[d["photo_type"]] = suggested.get(d["photo_type"], 0) + 1
     counts, confirmed, low = {}, {}, {}
     for p, t in eff.items():
         counts[t] = counts.get(t, 0) + 1
@@ -38,7 +42,7 @@ def summary():
     types = []
     for k, v in hf.TAXONOMY.items():
         types.append({"key": k, "name": v.get("name", k), "name_en": v.get("name_en", ""), "count": counts.get(k, 0),
-                      "confirmed": confirmed.get(k, 0), "low": low.get(k, 0), "bin": k == ei.BIN})
+                      "confirmed": confirmed.get(k, 0), "low": low.get(k, 0), "suggested": suggested.get(k, 0), "bin": k == ei.BIN})
     types.sort(key=lambda x: (x["bin"], -x["count"]))
     rep = {}
     if ei.REPORT.exists():
@@ -60,6 +64,15 @@ def add_type(name, name_en, key="", must_have=None, anomalies=None, anomalies_en
 
 def images(ptype, view="all", offset=0, limit=60):
     ei, hf = _legacy()
+    if view == "suggested":   # 按权重归类给出的建议（待确认）：置信度高的在前
+        from .typesuggest import load_suggestions
+        eff = ei.effective_types()
+        rows = [{"path": p, "confirmed": False, "conf": d.get("confidence", 0), "second": "", "second_conf": 0,
+                 "suggested": {"label": d.get("label"), "confidence": d.get("confidence"), "weights": d.get("weights"), "boxes": d.get("boxes")},
+                 "current": eff.get(p)}
+                for p, d in load_suggestions(ei, hf).items() if d["photo_type"] == ptype]
+        rows.sort(key=lambda r: -r["conf"])
+        return {"total": len(rows), "items": rows[offset:offset + min(limit, 300)]}
     eff = ei.effective_types()
     conf = ei.confirmed_labels()
     pred = ei.load_pred()
@@ -174,6 +187,12 @@ def register_routes(router, engine, directory):
     @router.post("/types/confirm", tags=["types"])
     def type_confirm(payload: dict = Body(...)):
         return confirm(payload.get("paths") or [], payload.get("type", ""))
+
+    @router.post("/types/suggestions/dismiss", tags=["types"])
+    def type_suggestions_dismiss(payload: dict = Body(...)):
+        """忽略按权重归类给出的建议：这些图不再建议成这个类型"""
+        from .typesuggest import dismiss
+        return dismiss(payload.get("paths") or [], payload.get("type", ""))
 
     @router.post("/types/train", tags=["types"])
     def type_train():

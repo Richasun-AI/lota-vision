@@ -65,12 +65,21 @@ function mini(label, v) { return h("div", {}, h("div", { class: "small muted" },
 async function publish(pid, settings) {
   const name = settings.naming.dataset.replace("{project}", pid);
   UI.modal("打包最新标注为新数据集", h("div", { class: "form" },
+    h("p", {}, h("strong", {}, `子项目：${UI.projectInfo(pid)?.config?.name || pid}（${pid}）`)),
     h("p", {}, `会把所有已复核的标注打包成一个新版本，按“${name}”自动编号；验证 ${Math.round(settings.split.val * 100)}%、测试 ${Math.round(settings.split.test * 100)}%（随机种子 ${settings.split.seed}，同一张图每次都分到同一部分）。`),
     h("div", { class: "callout" }, "如果 Label Studio 里还有刚提交、没回收的标注，先在工作流里跑一次「回收标注」，或用「主动学习一轮」模板（它会先回收）。")),
     [{ label: "取消" }, { label: "回收并打包", kind: "primary", run: async () => {
       UI.toast("回收 Label Studio 标注…");
-      try { await UI.runTool(pid, "labels.pull", {}); } catch (e) { UI.toast("回收跳过：" + e.message, true); }
-      const out = await UI.runTool(pid, "dataset.publish", { version: name, val_fraction: settings.split.val, test_fraction: settings.split.test, seed: settings.split.seed });
+      try { await UI.runTool(pid, "labels.pull", {}); }
+      catch (e) { UI.toast(/Label Studio connection/i.test(e.message) ? "这个子项目没连接 Label Studio，跳过回收" : "回收跳过：" + e.message, true); }
+      let out;
+      try { out = await UI.runTool(pid, "dataset.publish", { version: name, val_fraction: settings.split.val, test_fraction: settings.split.test, seed: settings.split.seed }); }
+      catch (e) {
+        if (/No accepted samples/i.test(e.message)) throw new Error(`子项目「${UI.projectInfo(pid)?.config?.name || pid}」还没有已复核的标注，没法打包。` +
+          "标注在 Label Studio 里做完后，先到工作台「标注系统」点“立即回收标注”；每张图提交前要选 Targets reviewed（框都画完了）或 No target（没有目标），才算已复核。" +
+          "如果标注是在别的子项目里做的，先在顶部切换子项目。");
+        throw e;
+      }
       UI.toast(`已打包 ${out.version}`); render();
     } }]);
 }

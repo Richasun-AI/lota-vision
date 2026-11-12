@@ -8,7 +8,9 @@ const state = {
   offset: 0, status: "", checkpoint: "", images: [], selections: new Map(),
   token: (()=>{try{return localStorage.getItem("lota-token")||sessionStorage.getItem("lota-token")||"";}catch{return "";}})(),
 };
-const perPage = 36;
+// 图库每页张数：可选，记在浏览器里（接口一次最多 200 张）
+const PER_PAGE_OPTIONS = [36, 60, 100, 200];
+let perPage = (() => { try { const n = +localStorage.getItem("lota-per-page"); return PER_PAGE_OPTIONS.includes(n) ? n : 36; } catch { return 36; } })();
 const nav = [
   ["gallery", "原图与分拣", "M3 5h14v11H3z M4 14l4-5 3 3 2-2 3 4"],
   ["labels", "标注", "M4 4h8l4 4v9H4z M7 12l2 2 4-4"],
@@ -146,6 +148,9 @@ function selected(project = state.project) {
   return state.selections.get(project.id);
 }
 
+// 当前子项目：所有页面共用（数据集、模型中心等页面读 localStorage，工作流读 sessionStorage），两处都写
+function shareCurrentProject(id) { try { sessionStorage.setItem("lota-project", id); localStorage.setItem("lota-project", id); } catch {} }
+
 function saveSelection(project = state.project) {
   if (project) sessionStorage.setItem("lota-selected-" + project.id, JSON.stringify([...selected(project)]));
 }
@@ -245,11 +250,11 @@ async function initialize(preferred) {
     if (generation !== state.generation) return;
     state.projects = projects;
     state.tools = tools;
-    const chosen = preferred ?? state.project?.id ?? sessionStorage.getItem("lota-project");
+    const chosen = preferred ?? state.project?.id ?? (()=>{try{return sessionStorage.getItem("lota-project")||localStorage.getItem("lota-project");}catch{return null;}})();
     const previousId=state.project?.id;
     state.project = projects.find((project) => project.id === chosen) || projects[0] || null;
     if(previousId && previousId!==state.project?.id)state.annotationTask="";
-    if (state.project) sessionStorage.setItem("lota-project", state.project.id);
+    if (state.project) shareCurrentProject(state.project.id);
     $("#connection-dot").className = "indicator ready";
     await navigate(state.tab);
   } catch (error) {
@@ -303,7 +308,7 @@ $("#project-picker").addEventListener("change", (event) => {
   state.offset = 0;
   state.status = "";
   state.checkpoint = "";
-  sessionStorage.setItem("lota-project", project.id);
+  shareCurrentProject(project.id);
   navigate("gallery");
 });
 
@@ -483,6 +488,24 @@ function setVisible(checked) {
   updateSelectionUI();
 }
 
+// 选中当前筛选范围里的全部图片（跨页）。后台工具一次最多处理 1000 张，所以最多选 1000 张
+const SELECT_ALL_MAX = 1000;
+async function selectAllInRange(project = state.project) {
+  const r = state.galleryRange || {}, values = selected(project), ids = [];
+  for (let offset = 0; ids.length < SELECT_ALL_MAX; offset += 200) {
+    const q = new URLSearchParams({limit: "200", offset: String(offset)});
+    let rows;
+    if (r.usingSorting) { if (r.category) q.set("category", r.category); rows = (await request(pathFor(project) + "/sorting?" + q)).items || []; }
+    else { if (r.status) q.set("status", r.status); if (r.checkpoint) q.set("checkpoint", r.checkpoint); rows = await request(pathFor(project) + "/images?" + q); }
+    ids.push(...rows.map((x) => x.image_id));
+    if (rows.length < 200) break;
+  }
+  const chosen = ids.slice(0, SELECT_ALL_MAX);
+  for (const id of chosen) values.add(id);
+  saveSelection(project); updateSelectionUI();
+  notifyUser("已选中 " + chosen.length + " 张" + (ids.length > SELECT_ALL_MAX || (r.total || 0) > SELECT_ALL_MAX ? "（筛选范围超过 " + SELECT_ALL_MAX + " 张，只选了前 " + SELECT_ALL_MAX + " 张；处理完再选下一批）" : ""));
+}
+
 function clearSelection() {
   selected().clear();
   saveSelection();
@@ -520,7 +543,8 @@ function imageCard(project, photo) {
 }
 
 async function queueTool(tool, args, project = state.project, announce = true) {
-  if(state.annotationTask && /^(labels|dataset|model)\./.test(tool))args={...args,annotation_task:state.annotationTask};
+  const takesTask = !!state.tools.find((t) => t.id === tool)?.schema?.properties?.annotation_task;
+  if(state.annotationTask && takesTask && /^(labels|dataset|model)\./.test(tool))args={...args,annotation_task:state.annotationTask};
   const job = await request(pathFor(project) + "/tools/" + encodeURIComponent(tool), "POST", args);
   if (announce) notifyUser("已提交任务 " + String(job.id || "").slice(0, 8));
   return job;
@@ -557,7 +581,13 @@ async function galleryPage() {
   const sortQuery=new URLSearchParams({limit:String(perPage),offset:String(state.offset)});
   if(state.category)sortQuery.set("category",state.category);
   const [stats, originalImages, sorting] = await Promise.all([request(pathFor(project) + "/stats"), request(pathFor(project) + "/images?" + query),request(pathFor(project)+"/sorting?"+sortQuery)]);
-  const images=Object.keys(sorting.categories).length&&!state.status&&!state.checkpoint?sorting.items:originalImages;
+  const usingSorting=!!Object.keys(sorting.categories).length&&!state.status&&!state.checkpoint;
+  const images=usingSorting?sorting.items:originalImages;
+  // 当前筛选范围一共多少张（按检查点筛选时算不出总数，只能逐页翻）
+  let total=null;
+  if(usingSorting)total=state.category?(sorting.categories[state.category]||0):Object.values(sorting.categories).reduce((a,b)=>a+b,0);
+  else if(!state.checkpoint)total=!state.status?stats.total:state.status==="extracted"?stats.extracted:(stats.review||{})[state.status]??null;
+  state.galleryRange={usingSorting,category:state.category||"",status:state.status||"",checkpoint:state.checkpoint||"",total};
   if (project !== state.project) return document.createDocumentFragment();
   state.images = images;
   const status = select([["", "全部复核状态"], ["pending", "待复核"], ["accepted", "已确认"],
@@ -575,14 +605,32 @@ async function galleryPage() {
     h("div", {class: "actions"}, h("strong", {id: "selection-count"}, "已选 " + selected(project).size + " 张"),
       button("选中本页", () => setVisible(true), "small", {disabled: !images.length}),
       button("取消本页", () => setVisible(false), "small", {disabled: !images.length}),
+      button("选中全部筛选结果" + (total != null ? "（" + Math.min(total, SELECT_ALL_MAX) + " 张）" : ""), asyncClick(() => selectAllInRange(project)), "small", {disabled: !images.length, title: "把当前筛选范围里的图全部勾上（跨页），一次最多 " + SELECT_ALL_MAX + " 张"}),
       button("清空", clearSelection, "small")),
     h("div", {class: "actions"},
       button("批量复核所选", () => batchReviewDialog(project), "small", {disabled: !hasSelection, dataset: {needsSelection: "true"}}),
       button("提交标注", () => toolDialog("labels.push", {image_ids: [...selected(project)]}), "small", {
         disabled: !hasSelection, dataset: {needsSelection: "true"}}),
       button("抽取所选", () => confirmExtract(project), "small primary", {disabled: !hasSelection, dataset: {needsSelection: "true"}}))));
-  const previous = () => { state.offset = Math.max(0, state.offset - perPage); navigate("gallery"); };
-  const next = () => { state.offset += perPage; navigate("gallery"); };
+  const pageNo = Math.floor(state.offset / perPage) + 1, pages = total == null ? null : Math.max(1, Math.ceil(total / perPage));
+  const go = (n) => { n = Math.max(1, pages ? Math.min(pages, n) : n); state.offset = (n - 1) * perPage; navigate("gallery"); };
+  const hasNext = pages ? pageNo < pages : images.length >= perPage;
+  const pager = () => {
+    const jump = h("input", {type: "number", min: 1, max: pages || undefined, value: pageNo, class: "page-jump", "aria-label": "页码"});
+    jump.onkeydown = (e) => { if (e.key === "Enter") go(parseInt(jump.value, 10) || 1); };
+    const size = select(PER_PAGE_OPTIONS.map((n) => [String(n), "每页 " + n + " 张"]), String(perPage), {"aria-label": "每页张数"});
+    size.onchange = () => { const first = state.offset; perPage = +size.value; try { localStorage.setItem("lota-per-page", size.value); } catch {}
+      state.offset = Math.floor(first / perPage) * perPage; navigate("gallery"); };   // 换每页张数后，仍停在当前看到的第一张所在的页
+    return h("div", {class: "panel tight rail pagination"}, h("span", {class: "small muted"},
+      images.length ? "显示第 " + (state.offset + 1) + "–" + (state.offset + images.length) + " 张" + (total != null ? "，共 " + total + " 张" : "") : "没有结果"),
+      h("div", {class: "actions"}, size,
+        button("首页", () => go(1), "small", {disabled: pageNo <= 1}),
+        button("上一页", () => go(pageNo - 1), "small", {disabled: pageNo <= 1}),
+        jump, pages ? h("span", {class: "small"}, "/ " + pages) : "",
+        button("跳转", () => go(parseInt(jump.value, 10) || 1), "small"),
+        button("下一页", () => go(pageNo + 1), "small", {disabled: !hasNext}),
+        button("末页", () => go(pages), "small", {disabled: !pages || pageNo >= pages})));
+  };
   return h("div", {},
     page("原图与分拣", "按站点和检查点复核样本，选中后抽取到当前场景。", h("div", {class: "actions"},
       button("刷新", () => navigate("gallery")), button("扫描原图", () => toolDialog("catalog.scan"), "primary", {disabled: !project.active}))),
@@ -591,19 +639,16 @@ async function galleryPage() {
     panel(h("strong", {}, "选图步骤"),
       h("p", {}, "先运行自动分拣，再按类型复核并抽取图片。"),
       h("p", {class:"small muted"}, "点击编辑工作流，可添加检测指定目标和目录分流节点。")),
-    panel(button("\u7c7b\u522b\u7f16\u8f91\u5668",()=>categoryEditor()),button("\u786e\u8ba4\u6240\u9009\u56fe\u7247\u7c7b\u522b",()=>toolDialog("curation.confirm",{image_ids:[...selected(project)],category:state.category||""})),
+    panel(button("\u7c7b\u522b\u7f16\u8f91\u5668",()=>categoryEditor()),button("\u4ece\u7167\u7247\u7c7b\u578b\u62bd\u56fe",()=>toolDialog("curation.pick_type",{only_confirmed:true}),"",{title:"\u6309\u201c\u7167\u7247\u7c7b\u578b\u201d\u9875\u7684\u5f52\u7c7b\u7ed3\u679c\u628a\u67d0\u7c7b\u7167\u7247\u590d\u5236\u8fdb\u672c\u5b50\u9879\u76ee\uff0c\u7c7b\u522b\u4e00\u8d77\u5e26\u8fc7\u6765\uff0c\u4e0d\u7528\u91cd\u65b0\u5206\u62e3"}),button("按照片类型补类别",()=>toolDialog("curation.backfill_types",{dry_run:true}),"",{title:"给本子项目已有的图按“照片类型”页的结果补上类别"}),button("\u786e\u8ba4\u6240\u9009\u56fe\u7247\u7c7b\u522b",()=>toolDialog("curation.confirm",{image_ids:[...selected(project)],category:state.category||""})),
  button("\u8bad\u7ec3\u7167\u7247\u5206\u7c7b\u5668",()=>toolDialog("curation.train")),
  button("\u91cd\u65b0\u5f52\u7c7b\u6240\u9009\u56fe\u7247",()=>toolDialog("curation.reclassify",{image_ids:[...selected(project)]})),
  button("\u79fb\u9664\u6240\u9009\u56fe\u7247\u7684\u7c7b\u522b",()=>cleanupDialog(project,"unconfirm")),
  button("\u6392\u9664\u6240\u9009\uff08\u53ef\u6062\u590d\uff09",()=>cleanupDialog(project,"reject")),
  button("\u6062\u590d\u6240\u9009\u4e3a\u5f85\u590d\u6838",()=>cleanupDialog(project,"restore")),
- button("\u5220\u9664\u6240\u9009\u56fe\u7247",()=>cleanupDialog(project,"delete"),"danger"),filter), selection,
+ button("\u5220\u9664\u6240\u9009\u56fe\u7247",()=>cleanupDialog(project,"delete"),"danger"),filter), selection, images.length ? pager() : "",
     images.length ? h("div", {class: "gallery"}, images.map((photo) => imageCard(project, photo))) :
       empty(project.config.sources.length ? "当前筛选范围没有图片。可扫描原图或清除筛选。" : "在场景配置中添加图片来源，保存后扫描原图。"),
-    h("div", {class: "panel tight rail pagination"}, h("span", {class: "small muted"},
-      images.length ? "显示第 " + (state.offset + 1) + "–" + (state.offset + images.length) + " 张" : "没有结果"),
-    h("div", {class: "actions"}, button("上一页", previous, "small", {disabled: !state.offset}),
-      button("下一页", next, "small", {disabled: images.length < perPage}))));
+    pager());
 }
 
 // 大图查看器：先秒开 1800px 预览，后台换成原图；滚轮缩放、拖动平移、双击 适应/100%；
@@ -858,6 +903,7 @@ async function toolDialog(id, preset = {}) {
       input = h("input", {type: "text", readOnly: true, value: value.length + " 张"});
       input._value = value;
       if (!value.length) notes.push(h("p", {class: "error"}, "还没有勾选图片：先在图库里勾选要处理的照片。"));
+      if (value.length > SELECT_ALL_MAX) notes.push(h("p", {class: "error"}, "已勾选 " + value.length + " 张，一次最多处理 " + SELECT_ALL_MAX + " 张：请先“清空”再分批选。"));
     } else if (extra[key]) input = extra[key];
     else if (key === "annotation_task") input = select(Object.keys(config.annotation_tasks || {}).map(x => [x, x]), value);
     else if (p?.kind === "combo") input = select(p.values.map(v => [v, v === "" ? "（不填）" : v]), value);
@@ -886,11 +932,49 @@ async function toolDialog(id, preset = {}) {
     const job = await queueTool(id, args, project, false);
     dialog.close();
     toastWithAction("已提交「" + tool.title + "」，完成后会提示", "查看进度", () => navigate("jobs"));
-    trackJob(project, job, tool.title, () => {
+    trackJob(project, job, tool.title, (current) => {
       if (id === "curation.confirm") { selected(project).clear(); saveSelection(project); }   // 确认完清空勾选，方便选下一批
+      if (id === "curation.backfill_types") backfillReport(project, current?.outputs?.result, args);
       if (project.id === state.project?.id && state.tab === tab) navigate(tab);
     });
   }), true);
+}
+
+// 添加检测类别：只在末尾追加，类别代码用小写字母、数字、下划线（Label Studio 里写成 “grounding bar” 也能自动对上 grounding_bar）
+function addClassDialog(project = state.project) {
+  const code = textInput("", {placeholder: "例如 grounding_bar"});
+  openDialog("添加类别", formContent(h("div", {},
+    h("p", {}, "现有类别：" + (project.config.classes || []).join("、")),
+    field("新类别代码", code, "小写字母开头，只用小写字母、数字、下划线；Label Studio 里的标签写成 “grounding bar” 也能自动对应到 grounding_bar"),
+    h("p", {class: "small muted"}, "加了以后：①以前的标注没检查过新类别，要在“标注系统”里“送回复核”；②当前 Label Studio 项目里没有这个标签的话，页面会提示新建一个。")),
+    "添加", async () => {
+      const v = code.value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+      if (!/^[a-z0-9][a-z0-9_.-]{0,63}$/.test(v)) throw Error("类别代码只能用小写字母、数字、下划线、点、短横线");
+      const config = structuredClone(project.config);
+      if (config.classes.includes(v)) throw Error("已经有这个类别：" + v);
+      config.classes = [...config.classes, v];
+      await request(pathFor(project), "PUT", {config, expected_revision: project.revision});
+      dialog.close(); await initialize(project.id); notifyUser("已添加类别 " + v);
+    }), true);
+}
+
+// “按照片类型补类别”的结果：试运行时先给统计，确认后再真正写入
+function backfillReport(project, r, args) {
+  if (!r) return;
+  const rows = Object.entries(r.by_type || {}).map(([name, n]) => h("tr", {}, h("td", {}, name), h("td", {}, String(n.confirmed)), h("td", {}, String(n.predicted))));
+  const skipped = Object.entries(r.skipped || {}).map(([k, n]) => k + " " + n).join("，");
+  openDialog("按照片类型补类别" + (r.dry_run ? "（试运行）" : ""), h("div", {},
+    h("p", {}, "子项目共 " + r.images + " 张，对上“照片类型”页的 " + r.matched + " 张：" +
+      (r.dry_run ? "可补为已确认 " : "已补为已确认 ") + r.confirmed + " 张，" + (r.dry_run ? "可归类待复核 " : "已归类待复核 ") + r.predicted + " 张。"),
+    rows.length ? h("table", {class: "table"}, h("thead", {}, h("tr", {}, h("th", {}, "类型"), h("th", {}, "已确认"), h("th", {}, "待复核"))), h("tbody", {}, ...rows)) :
+      h("p", {class: "muted"}, "没有可补的图。"),
+    skipped ? h("p", {class: "small muted"}, "跳过：" + skipped) : "",
+    r.picked_missing ? h("p", {class: "small muted"}, "以前抽过的原图里有 " + r.picked_missing + " 张已经找不到（删了或移走了），没法对上。") : "",
+    r.dry_run && (r.confirmed || r.predicted) ? h("div", {class: "actions"}, button("确认写入", asyncClick(async () => {
+      const job = await queueTool("curation.backfill_types", {...args, dry_run: false}, project, false);
+      dialog.close();
+      trackJob(project, job, "按照片类型补类别", (done) => { backfillReport(project, done?.outputs?.result, {...args, dry_run: false}); if (state.tab === "gallery") navigate("gallery"); });
+    }), "primary")) : ""));
 }
 
 function toastWithAction(text, label, action, failure = false) {
@@ -919,9 +1003,50 @@ async function trackJob(project, job, title, onDone) {
   }
 }
 async function labelsPage(){
+  const project=state.project;
+  const [ls,annotations]=await Promise.all([request(pathFor(project)+"/hub/ls-status").catch(e=>({connected:false,error:e.message})),request(pathFor(project)+"/annotations")]);
+  // 直接排“回收标注”任务（不弹参数框），完成后刷新本页
+  const pullNow=asyncClick(async()=>{const job=await queueTool("labels.pull",{},project,false);notifyUser("正在从 Label Studio 回收标注…");
+    trackJob(project,job,"回收标注",()=>{if(state.tab==="labels"&&state.project?.id===project.id)navigate("labels");});});
+  const autoPull=(on)=>asyncClick(async()=>{const job=await request(pathFor(project)+"/tools/labels.ls_webhook","POST",{enabled:on,engine_url:"http://127.0.0.1:8795"});
+    trackJob(project,job,on?"开启自动回收":"关闭自动回收",()=>{if(state.tab==="labels"&&state.project?.id===project.id)navigate("labels");});});
+  const runAndRefresh=(tool,args,title,then)=>asyncClick(async()=>{
+    const job=await request(pathFor(project)+"/tools/"+encodeURIComponent(tool),"POST",args);notifyUser("已提交「"+title+"」");
+    trackJob(project,job,title,async(done)=>{if(then)await then(done);if(state.tab==="labels"&&state.project?.id===project.id)navigate("labels");});});
+  // 类别：只能在末尾追加（删改会让已有标注的类别编号错位）；加了以后旧标注要“送回复核”检查新类别
+  const classesPanel=panel(h("div",{class:"rail"},h("strong",{},"检测类别"),button("添加类别",()=>addClassDialog(project),"small")),
+    h("p",{},(project.config.classes||[]).map((c,i)=>i+". "+c).join("　")),
+    h("p",{class:"small muted"},"一个模型可以识别多个类别，以后还能接着加。新类别只加在末尾；加了以后，以前的标注没检查过新类别，要先“送回复核”再进数据集。"));
+  const cfg=ls.config||{},cfgBad=ls.connected&&!ls.error&&((cfg.missing_classes||[]).length||cfg.has_review_choice===false);
+  const cfgPanel=cfgBad?h("section",{class:"panel callout"},h("strong",{},"Label Studio 项目 #"+ls.project_id+" 的标注配置不完整"),
+    (cfg.missing_classes||[]).length?h("p",{},"缺少类别："+cfg.missing_classes.join("、")):"",
+    cfg.has_review_choice===false?h("p",{},"没有 “Targets reviewed / No target” 选项：在这个项目里标的图，引擎没法确认框已画全，所以收不进来。"):"",
+    h("p",{class:"small muted"},"点下面的按钮，按现在的类别新建一个 Label Studio 项目并切换过去（自动开启自动回收）；旧项目留在 Label Studio 里不动，里面已画的框可以用“送回复核”带到新项目。"),
+    h("div",{class:"actions"},button("按现在的类别新建 Label Studio 项目",runAndRefresh("labels.ls_setup",{new:true},"新建 Label Studio 项目",
+      async()=>{await request(pathFor(project)+"/tools/labels.ls_webhook","POST",{enabled:true,engine_url:"http://127.0.0.1:8795"});await initialize(project.id);}),"primary"))):"";
+  const nr=ls.needs_review||{},nrTotal=(nr.stale||0)+(nr.rejected||0);
+  const reviewPanel=nrTotal?panel(h("strong",{},"需要复核："+nrTotal+" 张"),
+    nr.stale?h("p",{},"加新类别前已通过的旧标注 "+nr.stale+" 张：没检查过新类别，暂时不能进数据集。"):"",
+    nr.rejected?h("p",{},"以前回收没通过、但已经画了框的 "+nr.rejected+" 张（类别名对不上、没选 Targets reviewed 等）。"):"",
+    h("p",{class:"small muted"},"“送回复核”会把这些图带着已有的框送进当前 Label Studio 项目，打开就有框：补画新类别、改错框，选 Targets reviewed 提交即可。有了新类别的模型后，可以选它给旧图预画新类别的框，补查更快。"),
+    h("div",{class:"actions"},button("送回 Label Studio 复核",()=>toolDialog("labels.rereview"),"primary"))):"";
+  let status;
+  if(!ls.connected)status=panel(h("strong",{},"Label Studio"),h("p",{},"这个子项目还没连接 Label Studio。点“提交所选图片”时会提示一键连接。"));
+  else if(ls.error)status=panel(h("strong",{},"Label Studio 项目 #"+ls.project_id),h("p",{class:"error"},"连不上 Label Studio："+ls.error));
+  else{
+    const behind=Math.max(0,(ls.annotated||0)-(ls.pulled||0));
+    status=panel(h("div",{class:"rail"},h("strong",{},"Label Studio 项目 #"+ls.project_id+(ls.title?" · "+ls.title:"")),
+        ls.url?h("a",{href:ls.url,target:"_blank",rel:"noopener"},"打开 Label Studio ↗"):""),
+      h("div",{class:"metrics"},stat("任务",ls.tasks),stat("已标注",ls.annotated),stat("已回收到引擎",ls.pulled),stat("自动回收",ls.auto_pull?"已开启":"未开启")),
+      behind?h("p",{},"Label Studio 里有 "+behind+" 个已标注任务还没回收到引擎（只有选了 Targets reviewed / No target 的才算已复核）。"):h("p",{class:"small muted"},"标注都已回收。"),
+      h("p",{class:"small muted"},ls.auto_pull?"自动回收已开启：在 Label Studio 提交或修改标注后，引擎会自动回收，不用手动操作。":"开启自动回收后，在 Label Studio 提交或修改标注，引擎会自动回收。"),
+      h("div",{class:"actions"},button("立即回收标注",pullNow,"primary"),
+        ls.auto_pull?button("关闭自动回收",autoPull(false)):button("开启自动回收",autoPull(true))));
+  }
   return h("div",{},page("标注系统","从已抽取图片提交任务，保留人工复核结果。"),
-    annotationTaskPicker(),panel(button("提交所选图片",()=>toolDialog("labels.push")),button("回收标注",()=>toolDialog("labels.pull")),
-    button("导入标注 JSON",()=>toolDialog("labels.import"))),code(await request(pathFor()+"/annotations")));
+    annotationTaskPicker(),classesPanel,status,cfgPanel,reviewPanel,panel(button("提交所选图片",()=>toolDialog("labels.push")),button("回收标注（选参数）",()=>toolDialog("labels.pull")),
+    button("导入标注 JSON",()=>toolDialog("labels.import"))),
+    h("details",{},h("summary",{},"标注明细（原始数据）"),code(annotations)));
 }
 async function datasetsPage(){
  return h("div",{},page("数据集版本","发布时核对标注、站点划分和文件哈希。"),

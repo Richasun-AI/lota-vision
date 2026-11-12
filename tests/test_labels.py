@@ -49,6 +49,17 @@ class AnnotationTest(unittest.TestCase):
         item["annotations"] = [{"result": results, "was_cancelled": False, "ground_truth": ground_truth}]
         return item
 
+    def test_unlabeled_resend_does_not_overwrite_existing_annotation(self):
+        image = self.image(7, "site-7")
+        labels.import_annotations(self.project, [self.task(image, [box(), choice("Targets reviewed")])], ["gate"])
+        resent = self.task(image, [])
+        resent["annotations"] = []          # 送回复核后，Label Studio 里还没人标
+        resent["predictions"] = [{"result": [box(), choice("Targets reviewed")]}]
+        summary = labels.import_annotations(self.project, [resent], ["gate"])
+        self.assertEqual(summary["counts"], {"kept_existing": 1})
+        current, = labels.list_annotations(self.project)
+        self.assertEqual(current["status"], "accepted")
+
     def test_predictions_and_conflicts_stay_out_of_the_dataset(self):
         positive, second, negative, predicted, conflict = [self.image(i, f"site-{i}") for i in range(1, 6)]
         unreviewed = self.task(predicted, [])

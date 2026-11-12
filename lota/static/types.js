@@ -21,7 +21,8 @@ function render() {
     list.replaceChildren(...S.types.filter((t) => !s || (t.key + t.name + t.name_en).toLowerCase().includes(s)).map((t) =>
       h("div", { class: "titem" + (t.key === cur ? " on" : ""), onclick: () => { cur = t.key; offset = 0; sel.clear(); mode = "browse"; render(); } },
         h("span", {}, t.bin ? "🗃️ " : "", t.name, h("span", { class: "tiny muted" }, " " + (t.name_en || ""))),
-        h("span", { class: "n" }, `${t.count}`, t.confirmed ? h("span", { style: { color: "var(--ok)" } }, ` ✓${t.confirmed}`) : ""))),
+        h("span", { class: "n" }, `${t.count}`, t.confirmed ? h("span", { style: { color: "var(--ok)" } }, ` ✓${t.confirmed}`) : "",
+          t.suggested ? h("span", { style: { color: "var(--brand-600)" }, title: "权重建议（待确认）" }, ` 💡${t.suggested}`) : ""))),
       h("div", { class: "titem" + (cur === TRASH ? " on" : ""), style: { marginTop: "8px", borderTop: "1px dashed var(--line-2)", paddingTop: "10px" },
         onclick: () => { cur = TRASH; offset = 0; sel.clear(); mode = "browse"; render(); } },
         h("span", {}, "🗑️ 回收站", h("span", { class: "tiny muted" }, " 删除的照片")), h("span", { class: "n" }, `${TR.total}`)));
@@ -101,6 +102,11 @@ async function drawMain() {
     UI.toast(`已${label} ${sel.size} 张`); sel.clear(); S = await UI.api("/api/types/summary"); render();
   };
   moveSel.onchange = () => { if (moveSel.value) act(moveSel.value, "移到“" + tname(moveSel.value) + "”"); };
+  const dismissSel = async () => {   // 权重建议：不采纳（照片留在原来的类型）
+    if (!sel.size) return UI.toast("先点选照片（可多选）", true);
+    await UI.api("/api/types/suggestions/dismiss", { method: "POST", body: { paths: [...sel], type: cur } });
+    UI.toast(`已忽略 ${sel.size} 张的建议`); sel.clear(); S = await UI.api("/api/types/summary"); render();
+  };
   const bar = h("div", { class: "bar" },
     h("div", { class: "row between" },
       h("div", {}, h("h2", { style: { margin: 0, fontSize: "18px" } }, (t.bin ? "🗃️ " : "") + (t.name || cur), h("span", { class: "muted small" }, `  ${t.name_en || ""} · ${cur}`)),
@@ -110,7 +116,8 @@ async function drawMain() {
         !t.bin ? h("button", { class: "btn" + (mode === "similar" ? " primary" : ""), onclick: () => { mode = mode === "similar" ? "browse" : "similar"; sel.clear(); drawMain(); } },
           mode === "similar" ? "← 回到本类照片" : "🔍 找相似图（用已确认的当样板）") : null)),
     h("div", { class: "row", style: { marginTop: "8px" } },
-      mode === "browse" ? h("div", { class: "tabs", style: { margin: 0, border: 0 } }, ...[["predicted", "待确认（模型猜的）"], ["low", "没把握"], ["confirmed", "已确认"], ["all", "全部"]].map(([k, l]) =>
+      mode === "browse" ? h("div", { class: "tabs", style: { margin: 0, border: 0 } }, ...[["predicted", "待确认（模型猜的）"], ["low", "没把握"], ["confirmed", "已确认"], ["all", "全部"],
+        ...(t.suggested || view === "suggested" ? [["suggested", `💡 权重建议（${t.suggested || 0}）`]] : [])].map(([k, l]) =>
         h("button", { class: view === k ? "on" : "", onclick: () => { view = k; offset = 0; sel.clear(); drawMain(); } }, l))) : null,
       h("span", { class: "spacer", style: { flex: 1 } }),
       h("span", { class: "small muted" }, `已选 ${sel.size}`),
@@ -118,6 +125,7 @@ async function drawMain() {
       h("button", { class: "btn sm", onclick: () => { sel.clear(); drawMain(); } }, "清空"),
       !t.bin ? h("button", { class: "btn sm primary", onclick: () => act(cur, "确认为“" + t.name + "”") }, mode === "similar" ? "✓ 收进本类" : "✓ 确认为本类") : null,
       moveSel,
+      view === "suggested" && mode === "browse" ? h("button", { class: "btn sm", title: "这些照片不再建议成本类型（不改它们现在的类型）", onclick: dismissSel }, "✕ 忽略所选建议") : null,
       !t.bin ? h("button", { class: "btn sm", onclick: () => act(S.types.find((x) => x.bin).key, "放进临时仓库") }, "🗃️ 放进临时仓库") : null,
       h("button", { class: "btn sm danger", title: "把原图从服务器原目录里删掉（先进回收站，可恢复）", onclick: () => { if (!sel.size) return UI.toast("先点选照片（可多选）", true); delDlg([...sel]); } }, "🗑️ 删除所选")));
   const grid = h("div", { class: "pgrid" });
@@ -132,7 +140,9 @@ async function drawMain() {
   } else {
     const d = await UI.api(`/api/types/${cur}/images?view=${view}&offset=${offset}&limit=60`);
     total = d.total;
-    items = d.items.map((x) => ({ path: x.path, badge: x.confirmed ? "✓ 已确认" : `${Math.round(x.conf * 100)}%`, ok: x.confirmed,
+    items = d.items.map((x) => x.suggested ? ({ path: x.path, badge: `💡 ${x.suggested.label} ${Math.round((x.suggested.confidence || 0) * 100)}%`,
+      sub: `权重 ${x.suggested.weights || ""} 检出 ${x.suggested.label}` + (x.current ? `；现在归在：${tname(x.current)}` : "") })
+      : ({ path: x.path, badge: x.confirmed ? "✓ 已确认" : `${Math.round(x.conf * 100)}%`, ok: x.confirmed,
       sub: !x.confirmed && x.second ? `也像：${tname(x.second)} ${Math.round(x.second_conf * 100)}%` : "" }));
   }
   LIST = items; LIST_PAGED = mode === "browse"; LIST_TOTAL = total;

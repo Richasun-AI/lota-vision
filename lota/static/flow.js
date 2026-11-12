@@ -61,6 +61,10 @@ function registerNodes() {
           w = this.addWidget("button", p.label + "：" + (v || "全部（点我选择）"), null, () => pickLabels(this, key));
           w._labels = p.label;
         }
+        else if (p.kind === "typerules" || p.kind === "phototypes") {  // 复杂参数：点按钮弹出编辑框
+          w = this.addWidget("button", p.label + "：" + complexSummary(p.kind, v), null, () => pickComplex(this, key));
+          w._complex = p.label; w._ckind = p.kind;
+        }
         else if (p.kind === "toggle") w = this.addWidget("toggle", p.label, !!v, set);
         else w = this.addWidget("text", p.label, v ?? "", set);
         w._key = key;
@@ -96,6 +100,7 @@ async function loadDyn(pid) {
     fetch("/static/standard_categories.json").then((r) => r.json()).catch(() => ({}))]);
   const al = Object.keys(models.aliases || {}), vs = (models.models || []).map((m) => m.version);
   DYN.model = [...new Set(["production", ...al, ...vs])].map((v) => [v, al.includes(v) ? `${v}（别名）` : v === "production" && !al.includes(v) ? "production（还没设置）" : v]);
+  DYN.classes = project.config?.classes || [];   // 子项目模型认的类别（“找什么目标”在选了本场景模型时用）
   const cats = project.config?.categories || {};
   // 先列本场景已有的类别，再列标准照片类型（选了就在运行时自动加进场景）
   const own = Object.entries(cats).filter(([, c]) => c.enabled).map(([k, c]) => [k, c.name + (c.name_en ? " / " + c.name_en : "")]);
@@ -113,6 +118,7 @@ function setParam(node, key, val) {
   node.properties[key] = val;
   const w = (node.widgets || []).find((w) => w._key === key);
   if (w && w._labels) { node.properties[key] = labelText(val).join(","); w.name = w._labels + "：" + (node.properties[key] || "全部（点我选择）"); }
+  else if (w && w._complex) w.name = w._complex + "：" + complexSummary(w._ckind, val);
   else if (w && w._dyn) w.value = dynShow(w._dyn, val);
   else if (w) w.value = w._weights ? base(val) : val;
   if (w && w._weights) {  // 换了权重：去掉新权重不认识的目标
@@ -140,7 +146,10 @@ function loadTemplate(name) {
     graph.add(node);
   }
   for (const [a, ao, b, bi] of t.links) nodeBySid(a).connect(ao, nodeBySid(b), bi);
-  if (t.project && $("#project").value !== t.project) { $("#project").value = t.project; refreshSaved().catch(() => {}); loadDyn(t.project).catch(() => {}); }
+  if (t.project && $("#project").value !== t.project && [...$("#project").options].some((o) => o.value === t.project)) {   // 专用模板（如空开）切到它自己的子项目，并提示
+    $("#project").value = t.project; shareProject(t.project); refreshSaved().catch(() => {}); loadDyn(t.project).catch(() => {});
+    $("#status").textContent = `这个模板属于子项目「${$("#project").selectedOptions[0].text}」，已切换过去`;
+  }
   $("#wf-id").value = name + "-e2e";
   renderSimple(); canvas.setDirty(true, true);
 }
@@ -176,6 +185,7 @@ function loadSteps(wf) {
 }
 let savedName = "";
 const LAST = (pid) => "flow-last-" + pid;
+const shareProject = (pid) => { try { if (pid) { sessionStorage.setItem("lota-project", pid); localStorage.setItem("lota-project", pid); } } catch {} };   // 和工作台共用当前子项目
 const remember = (pid, wid) => { try { localStorage.setItem(LAST(pid), wid); } catch {} };
 const lastOf = (pid) => { try { return localStorage.getItem(LAST(pid)) || ""; } catch { return ""; } };
 
@@ -186,9 +196,10 @@ const weightsOf = (node) => { const def = CAT[node.properties._tool]; const k = 
 const labelText = (v) => (Array.isArray(v) ? v.join(",") : String(v || "")).split(",").map((x) => x.trim()).filter(Boolean);
 async function labelBoxes(node, key, onDone) {  // 返回一组复选框（DOM）
   const wrap = document.createElement("div"); wrap.className = "label-pick"; wrap.textContent = "读取权重类别…";
-  const w = weightsOf(node);
-  if (!w) { wrap.textContent = "先选权重"; return wrap; }
-  weightsInfo(w).then((info) => {
+  const w = weightsOf(node), m = node.properties.model;
+  if (!w && !m) { wrap.textContent = "先选权重或本场景的模型"; return wrap; }
+  // 选了本场景的模型（如 latest）：类别按子项目的类别；否则从权重文件里读
+  (m ? Promise.resolve({ names: DYN.classes || [] }) : weightsInfo(w)).then((info) => {
     wrap.innerHTML = "";
     const chosen = new Set(labelText(node.properties[key]));
     for (const name of info.names) {
@@ -202,6 +213,85 @@ async function labelBoxes(node, key, onDone) {  // 返回一组复选框（DOM�
     wrap.append(tip);
   }).catch((e) => { wrap.textContent = "读不到权重类别：" + e.message; });
   return wrap;
+}
+// ── 归类规则（权重类别 → 照片类型，多条）和多选照片类型 ─────────────────────────
+// 存成文字：“grounding_bar>grounding_lightning; rust,crack>site_ground”、“site_ground,other”
+const parseRules = (v) => String(v || "").replace(/；/g, ";").split(";").map((x) => x.trim()).filter(Boolean).map((x) => {
+  const [l, t] = x.split(">"); return { labels: (l || "").split(",").map((y) => y.trim()).filter(Boolean), type: (t || "").trim() };
+});
+const rulesText = (rs) => rs.filter((r) => r.labels.length || r.type).map((r) => r.labels.join(",") + ">" + r.type).join("; ");
+const splitList = (v) => String(v || "").split(",").map((x) => x.trim()).filter(Boolean);
+function complexSummary(kind, v) {
+  if (kind === "typerules") { const n = parseRules(v).length; return n ? `${n} 条规则` : "（点我设置）"; }
+  const n = splitList(v).length; return n ? `${n} 类` : "全部";
+}
+async function complexEditor(node, key, onDone) {
+  const kind = CAT[node.properties._tool].params[key].kind;
+  const wrap = document.createElement("div"); wrap.className = "label-pick";
+  const types = (DYN.phototype || []).filter(([k]) => k);
+  if (kind === "phototypes") {
+    const chosen = new Set(splitList(node.properties[key]));
+    const q = document.createElement("input"); q.placeholder = "搜索类型"; q.style.marginBottom = "6px";
+    const list = document.createElement("div");
+    const draw = () => {
+      list.innerHTML = "";
+      for (const [k, show] of types.filter(([k, show]) => !q.value || (k + show).toLowerCase().includes(q.value.toLowerCase()))) {
+        const l = document.createElement("label"), c = document.createElement("input");
+        c.type = "checkbox"; c.checked = chosen.has(k);
+        c.onchange = () => { c.checked ? chosen.add(k) : chosen.delete(k); setParam(node, key, [...chosen].join(",")); onDone && onDone(); };
+        l.append(c, " " + show); l.style.display = "block"; list.append(l);
+      }
+    };
+    q.oninput = draw; draw(); wrap.append(q, list);
+    return wrap;
+  }
+  // typerules：类别从“当前子项目的模型”或权重文件里读
+  const w = weightsOf(node), m = node.properties.model;
+  let names = [];
+  if (m) names = DYN.classes || [];
+  else if (w) names = (await weightsInfo(w).catch(() => ({ names: [] }))).names;
+  let rules = parseRules(node.properties[key]);
+  if (!rules.length) rules = [{ labels: [], type: "" }];
+  const commit = () => { setParam(node, key, rulesText(rules)); onDone && onDone(); canvas.setDirty(true, true); };
+  const draw = () => {
+    wrap.innerHTML = "";
+    if (!names.length) { const t = document.createElement("div"); t.className = "muted"; t.textContent = "先选“当前子项目的模型”或权重，才能勾选它认识的类别"; wrap.append(t); }
+    rules.forEach((r, i) => {
+      const box = document.createElement("div"); box.className = "rule-row";
+      box.style.cssText = "border:1px solid var(--line,#ddd);border-radius:8px;padding:6px 8px;margin:6px 0";
+      const head = document.createElement("div"); head.innerHTML = `<b>规则 ${i + 1}</b>：权重里的这些类别 →`;
+      const labs = document.createElement("div");
+      for (const n of names) {
+        const l = document.createElement("label"), c = document.createElement("input");
+        c.type = "checkbox"; c.checked = r.labels.includes(n);
+        c.onchange = () => { r.labels = c.checked ? [...new Set([...r.labels, n])] : r.labels.filter((x) => x !== n); commit(); };
+        l.append(c, " " + n); l.style.marginRight = "10px"; labs.append(l);
+      }
+      const sel = document.createElement("select");
+      sel.add(new Option("（选择照片类型）", ""));
+      for (const [k, show] of types) if (k !== "other") sel.add(new Option(show, k));
+      sel.value = r.type; sel.onchange = () => { r.type = sel.value; commit(); };
+      const del = document.createElement("button"); del.textContent = "删除这条"; del.className = "small";
+      del.onclick = () => { rules.splice(i, 1); if (!rules.length) rules.push({ labels: [], type: "" }); commit(); draw(); };
+      box.append(head, labs, sel, document.createTextNode(" "), del); wrap.append(box);
+    });
+    const add = document.createElement("button"); add.textContent = "＋ 添加一条规则";
+    add.onclick = () => { rules.push({ labels: [], type: "" }); draw(); };
+    wrap.append(add);
+  };
+  draw();
+  return wrap;
+}
+async function pickComplex(node, key) {  // 节点上点按钮弹出的编辑框
+  document.querySelector(".pick-modal")?.remove();
+  const m = document.createElement("div"); m.className = "pick-modal";
+  const card = document.createElement("div"); card.className = "card"; card.style.maxHeight = "80vh"; card.style.overflow = "auto";
+  card.innerHTML = `<h3 style="margin:0 0 8px">${CAT[node.properties._tool].params[key].label}</h3>`;
+  card.append(await complexEditor(node, key));
+  const ok = document.createElement("button"); ok.textContent = "确定"; ok.className = "primary";
+  ok.onclick = () => { m.remove(); renderSimple(); canvas.setDirty(true, true); };
+  card.append(ok); m.append(card); m.onclick = (e) => { if (e.target === m) ok.onclick(); };
+  document.body.append(m);
 }
 async function pickLabels(node, key) {  // 节点上点按钮弹出的多选框
   document.querySelector(".pick-modal")?.remove();
@@ -275,6 +365,12 @@ function renderSimple() {
     const row = document.createElement("div"); row.className = "field";
     const id = `f-${sid}-${key}`;
     let input;
+    if (p.kind === "typerules" || p.kind === "phototypes") {
+      row.innerHTML = `<label>${CAT[node.properties._tool].title} · ${p.label}</label>`;
+      complexEditor(node, key).then((el) => row.insertBefore(el, row.children[1] || null));
+      const help = document.createElement("div"); help.className = "help"; help.textContent = p.help; row.append(help);
+      card.append(row); continue;
+    }
     if (p.kind === "labels") {
       row.innerHTML = `<label>${CAT[node.properties._tool].title} · ${p.label}（可多选）</label>`;
       labelBoxes(node, key).then((el) => row.insertBefore(el, row.children[1] || null));
@@ -300,10 +396,15 @@ function renderSimple() {
       if (p.kind === "number") { input.type = "number"; input.step = p.step || 1; if (p.min != null) input.min = p.min; if (p.max != null) input.max = p.max; }
     }
     input.id = id; input.value = node.properties[key] ?? "";
-    input.onchange = () => { setParam(node, key, p.kind === "number" ? Number(input.value) : input.value); if (p.kind === "weights") renderSimple(); };
+    // 换权重或换“本场景的模型”都要重画：“找什么目标”的类别跟着变
+    input.onchange = () => { setParam(node, key, p.kind === "number" ? Number(input.value) : input.value); if (p.kind === "weights" || p.kind === "model") renderSimple(); };
     row.innerHTML = `<label for="${id}">${CAT[node.properties._tool].title} · ${p.label}</label>`;
     row.append(input);
     const help = document.createElement("div"); help.className = "help"; help.textContent = p.help; row.append(help);
+    if (p.kind === "weights" && node.properties.model) {   // 选了本场景的模型，权重文件就用不上了
+      input.disabled = true;
+      help.textContent = `已选本场景的模型「${node.properties.model}」，用它找图，这一项不用管`;
+    }
     card.append(row);
   }
   box.append(card);
@@ -486,13 +587,16 @@ async function init() {
   $("#load-tpl").onclick = () => loadTemplate($("#template").value);
   $("#load-saved").onclick = () => openSaved($("#saved").value);
   $("#saved").onchange = () => openSaved($("#saved").value);  // 下拉选中就直接打开
-  $("#project").onchange = async () => { await loadDyn($("#project").value); await refreshSaved(); if (!openSaved(lastOf($("#project").value))) { graph.clear(); currentTpl = null; $("#wf-id").value = ""; renderSimple(); } };
+  $("#project").onchange = async () => { shareProject($("#project").value); await loadDyn($("#project").value); await refreshSaved(); if (!openSaved(lastOf($("#project").value))) { graph.clear(); currentTpl = null; $("#wf-id").value = ""; renderSimple(); } };
   $("#save").onclick = () => save().then((id) => ($("#status").textContent = `💾 已保存为 ${id}`)).catch(showErr);
   $("#run").onclick = () => run().catch(showErr);
   $("#cancel").onclick = () => api(`/projects/${$("#project").value}/jobs/${job}/control`, { method: "POST", body: JSON.stringify({ command: "cancel" }) }).then(() => poll()).catch(showErr);
   graph.start();
   const q = new URLSearchParams(location.search);
-  if (q.get("project")) $("#project").value = q.get("project");
+  // 默认用工作台当前选中的子项目（同一个标签页里共用 sessionStorage 的 lota-project），网址里指定的优先
+  const want = q.get("project") || (() => { try { return sessionStorage.getItem("lota-project") || localStorage.getItem("lota-project") || ""; } catch { return ""; } })();
+  if (want && [...$("#project").options].some((o) => o.value === want)) $("#project").value = want;
+  shareProject($("#project").value);
   await loadDyn($("#project").value);
   await refreshSaved();
   // 打开顺序：网址里指定的模板 → 上次打开/保存的工作流 → 第一个模板

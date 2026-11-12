@@ -223,14 +223,128 @@ def pick_type(c, photo_type, only_confirmed=False, limit=100, seed=42):
         raise ValueError(f"“{hf.TAXONOMY[photo_type]['name']}”没有可抽的新图片（已抽过 {len(picked)} 张）")
     folder = IMPORTS / project / f"{photo_type}-{time.strftime('%Y%m%d-%H%M%S')}"
     folder = _fresh_dir(folder)
+    copied = {}   # 复制后的文件 → ⑤页里是不是人工确认过
     for p in chosen:  # 复制，源图不动
         src = Path(hf.locate(p))
-        shutil.copy2(src, folder / src.name)
+        dst, n = folder / src.name, 1
+        while dst.exists():   # 不同文件夹里的同名照片，别互相覆盖
+            n += 1
+            dst = folder / f"{src.stem}-{n}{src.suffix}"
+        shutil.copy2(src, dst)
+        copied[dst] = human.get(p) == photo_type
     log.parent.mkdir(parents=True, exist_ok=True)
     log.write_text(json.dumps(sorted(picked | set(chosen)), ensure_ascii=False))
     out = import_folder(c, str(folder), recursive=False)
-    out.update({"photo_type": photo_type, "pool_left": len(pool) - len(chosen), "picked_before": len(picked)})
+    # 带上类别：⑤页人工确认过的 → 直接算本子项目已确认；只是模型预测的 → 归到这类、待复核
+    kept = set(out["image_ids"])
+    confirmed, predicted = set(), set()
+    for dst, is_human in copied.items():
+        key = _sha256(dst)
+        if key in kept:
+            (confirmed if is_human else predicted).add(key)
+    predicted -= confirmed
+    _ensure_category(c, photo_type, hf.TAXONOMY[photo_type])
+    if confirmed:
+        from .learning import confirm
+        confirm(c, sorted(confirmed), photo_type)
+    if predicted:
+        from .learning import human_labels
+        from .sorting import store_results
+        mine = human_labels(c.directory)   # 本子项目里已经人工确认过的，不覆盖
+        store_results(c.directory, [{"image_id": k, "category": photo_type, "review": "pending", "provenance": "photo_types",
+                                     "candidates": [{"label": photo_type, "source": "照片类型页模型预测"}]}
+                                    for k in sorted(predicted) if k not in mine])
+    out.update({"photo_type": photo_type, "pool_left": len(pool) - len(chosen), "picked_before": len(picked),
+                "confirmed": len(confirmed), "predicted": len(predicted)})
     return out
+
+
+class BackfillTypes(Spec):
+    only_confirmed: bool = False
+    dry_run: bool = False
+
+
+def backfill_types(c, only_confirmed=False, dry_run=False):
+    """给子项目里已有的图补类别：按⑤“照片类型”页的结果。对得上的两种图：
+    ① 以前“按照片类型抽图”复制进来的（picked.json 记着原图路径，按内容哈希对）；② 直接扫描原图目录收进来的（按原始路径对）。
+    ⑤页人工确认过的 → 本子项目已确认；只是模型预测的 → 归到这类、待复核。本子项目已经人工确认过的图不动；“其他/无关”（临时仓库）不补。"""
+    import sys
+    from collections import Counter
+    if str(LEGACY_PIPELINE) not in sys.path:
+        sys.path.insert(0, str(LEGACY_PIPELINE))
+    import emb_index as ei, hq_filter as hf
+    from .catalog import _database
+    from .learning import human_labels
+    eff, human = ei.effective_types(), ei.confirmed_labels()
+    with _database(c.directory) as db:
+        ids = {r[0] for r in db.execute("SELECT image_id FROM images")}
+        paths = list(db.execute("SELECT image_id, path FROM observations"))
+    found = {}   # image_id → ⑤页原图路径
+    for key, path in paths:   # ② 按原始路径
+        if path in eff:
+            found.setdefault(key, path)
+    log = IMPORTS / Path(c.directory).name / "picked.json"
+    missing = 0
+    for p in (json.loads(log.read_text()) if log.is_file() else []):   # ① 按内容哈希
+        src = Path(hf.locate(p))
+        if not src.is_file():
+            missing += 1
+            continue
+        key = _sha256(src)
+        if key in ids:
+            found.setdefault(key, p)
+    mine = human_labels(c.directory)
+    confirmed, predicted, skipped = {}, {}, Counter()
+    for key, p in found.items():
+        t = eff.get(p)
+        if not t or t == ei.BIN or t not in hf.TAXONOMY:
+            skipped["其他/无关或没有类型"] += 1
+        elif key in mine:
+            skipped["本子项目已人工确认"] += 1
+        elif human.get(p) == t:
+            confirmed.setdefault(t, []).append(key)
+        elif only_confirmed:
+            skipped["只是模型预测"] += 1
+        else:
+            predicted.setdefault(t, []).append(key)
+    if not dry_run:
+        from .learning import confirm
+        from .sorting import store_results
+        for t in sorted(set(confirmed) | set(predicted)):
+            _ensure_category(c, t, hf.TAXONOMY[t])
+        for t, keys in confirmed.items():
+            confirm(c, keys, t)
+        store_results(c.directory, [{"image_id": k, "category": t, "review": "pending", "provenance": "photo_types",
+                                     "candidates": [{"label": t, "source": "照片类型页模型预测"}]}
+                                    for t, keys in predicted.items() for k in keys])
+    name = lambda t: hf.TAXONOMY[t].get("name", t)
+    return {"dry_run": dry_run, "images": len(ids), "matched": len(found),
+            "confirmed": sum(map(len, confirmed.values())), "predicted": sum(map(len, predicted.values())),
+            "by_type": {name(t): {"confirmed": len(confirmed.get(t, [])), "predicted": len(predicted.get(t, []))}
+                        for t in sorted(set(confirmed) | set(predicted))},
+            "skipped": dict(skipped), "picked_missing": missing}
+
+
+def _ensure_category(c, key, taxonomy=None):
+    """子项目还没有这个类别（或停用了）→ 加进场景类别并启用；名称优先用标准照片类型清单，其次用⑤页的类型总表"""
+    cats = c.scenario.categories
+    if key in cats and cats[key].enabled:
+        return
+    from .store import Scenario
+    project = Path(c.directory).name
+    current = c.engine.store.project(project)
+    config = dict(current["config"])
+    categories = dict(config.get("categories") or {})
+    if key in categories:
+        categories[key] = {**dict(categories[key]), "enabled": True}
+    else:
+        std = _standard_categories().get(key)
+        t = taxonomy or {}
+        categories[key] = {**std, "enabled": True} if std else {
+            "name": t.get("name") or key, "name_en": t.get("name_en", ""), "description": "", "enabled": True}
+    config["categories"] = categories
+    c.engine.save(project, Scenario.model_validate(config), current["revision"])
+    c.scenario = Scenario.model_validate(config)
 
 
 def _ls_client(cfg):
@@ -252,14 +366,16 @@ class LsSetup(Spec):
     title: str | None = None
     token_env: str = "LABEL_STUDIO_TOKEN"
     local_files_root: str = str(deploy.DATA_ROOT)
+    new: bool = False   # True = 已连接过也新建一个（加了类别、旧项目缺“Targets reviewed”选项时用），旧项目留在 Label Studio 里不动
 
 
 def ls_setup(c, base_url="http://127.0.0.1:8081", title=None, token_env="LABEL_STUDIO_TOKEN",
-             local_files_root=str(deploy.DATA_ROOT)):
-    """给当前子项目建一个 Label Studio 项目（标注模板由引擎生成），并登记本地图片目录；已连接过就直接复用。"""
+             local_files_root=str(deploy.DATA_ROOT), new=False):
+    """给当前子项目建一个 Label Studio 项目（标注模板由引擎按当前类别生成，含确认选项），并登记本地图片目录；
+    已连接过就直接复用（new=True 时新建一个并切换过去）。"""
     from .labels import LabelStudioClient, label_config
     project = Path(c.directory).name
-    if c.scenario.label_studio:
+    if c.scenario.label_studio and not new:
         return {"project_id": c.scenario.label_studio.project_id, "reused": True,
                 "url": f"{c.scenario.label_studio.base_url}/projects/{c.scenario.label_studio.project_id}"}
     cfg = {"base_url": base_url, "token_env": token_env}
@@ -277,7 +393,159 @@ def ls_setup(c, base_url="http://127.0.0.1:8081", title=None, token_env="LABEL_S
     config["label_studio"] = {"base_url": base_url, "project_id": pid, "token_env": token_env,
                               "local_files_root": local_files_root}
     c.engine.save(project, Scenario.model_validate(config), current["revision"])  # 走引擎校验，记一个新配置版本
-    return {"project_id": pid, "reused": False, "url": f"{base_url}/projects/{pid}"}
+    old = c.scenario.label_studio.project_id if c.scenario.label_studio else None
+    return {"project_id": pid, "reused": False, "url": f"{base_url}/projects/{pid}", "previous_project_id": old}
+
+
+# ── 送回复核（通用）：子项目加了新类别后，旧标注没检查过新类别；或旧 Label Studio 项目里有收不进来的标注。
+#    把这些图带着已有的框送进当前 Label Studio 项目重新确认；可选一个模型给“标注时还没有的类别”预画框。任何子项目、任何类别都适用。
+class Rereview(Spec):
+    which: str = Field(default="all", pattern="^(all|stale|rejected)$")
+    selector: str = ""                       # 用哪个模型给新类别预画框；空 = 不用模型
+    confidence: float = Field(default=0.25, ge=0, le=1)
+    device: str = "0"
+    limit: int = Field(default=1000, ge=1, le=1000)
+    preselect: bool = True    # 预先选好 Targets reviewed（有框）/ No target（没框）：看一眼直接提交，或在 Label Studio 里整批“从预测生成标注”
+    replace: bool = False     # 已在当前 Label Studio 项目里、但还没人标过的任务：删掉重送（换成新的预填）；已经有人标过的不动
+
+
+def rereview_candidates(directory, task, classes):
+    """要重新确认的图 → {image_id: (原因, 已有的框, 标注时的类别清单)}
+    stale    = 已通过，但标注时的类别清单和现在不一样（后来加了类别，没检查过新类别）
+    rejected = 回收了但没通过（类别名对不上、没选 Targets reviewed 等），里面有能用的框"""
+    import sqlite3
+    from contextlib import closing
+    from .labels import _class_name
+    db = Path(directory) / "annotations" / "index.sqlite3"
+    if not db.is_file():
+        return {}
+    schema = {"task": task, "classes": list(classes)}
+    with closing(sqlite3.connect(db, timeout=10)) as conn:
+        rows = conn.execute("SELECT r.image_id, r.status, r.original FROM current_annotations c JOIN revisions r "
+                            "ON r.task=c.task AND r.image_id=c.image_id AND r.revision=c.revision WHERE c.task=?", (task,)).fetchall()
+    out = {}
+    for image_id, status, original in rows:
+        try:
+            entries = json.loads(original)
+        except (TypeError, ValueError):
+            continue
+        entries = [e for e in (entries if isinstance(entries, list) else [entries]) if isinstance(e, dict)]
+        sent = next((e.get("_ailabel_schema") for e in entries if e.get("_ailabel_schema")), None)
+        boxes = []
+        for e in entries:
+            anns = [a for a in (e.get("annotations") or []) if isinstance(a, dict) and isinstance(a.get("result"), list)
+                    and not a.get("was_cancelled") and not a.get("skipped")]
+            for item in (anns[-1]["result"] if anns else []):
+                v = item.get("value") if isinstance(item, dict) else None
+                if not isinstance(v, dict) or item.get("type") != "rectanglelabels":
+                    continue
+                name = _class_name(v.get("rectanglelabels"), classes)
+                if name and all(k in v for k in ("x", "y", "width", "height")):
+                    boxes.append({"x": v["x"], "y": v["y"], "width": v["width"], "height": v["height"],
+                                  "rotation": v.get("rotation", 0), "rectanglelabels": [name]})
+        old_classes = (sent or {}).get("classes") or []
+        if status == "accepted" and sent and sent != schema:
+            out[image_id] = ("stale", boxes, old_classes)
+        elif status in ("invalid", "unlabeled") and boxes:
+            out[image_id] = ("rejected", boxes, old_classes)
+    return out
+
+
+def rereview(c, which="all", selector="", confidence=0.25, device="0", limit=1000, preselect=True, replace=False):
+    """把要重新确认的图带着已有的框送进当前 Label Studio 项目：打开就有框，补画新类别、改错框，再选 Targets reviewed 提交。
+    选了模型的话，再用它给“标注时还没有的类别”预画框。已经在当前 Label Studio 项目里的图不重复送。"""
+    from .labels import _classes, _make_tasks, _project_name, _remote_tasks_by_image
+    ls = c.engine.store.project(Path(c.directory).name)["config"].get("label_studio")
+    if not ls:
+        raise ValueError("还没连接 Label Studio：先运行“连接 Label Studio”")
+    task, classes = c.scenario.task, list(c.scenario.classes)
+    if task != "detect":
+        raise ValueError("送回复核目前只支持检测（画框）任务")
+    cands = rereview_candidates(c.directory, task, classes)
+    if which != "all":
+        cands = {k: v for k, v in cands.items() if v[0] == which}
+    client = _ls_client(ls)
+    existing = _remote_tasks_by_image(client, ls["project_id"], _project_name(c.directory), task)
+    replaced = 0
+    if replace:   # 还没人标过的任务删掉重送；有标注（含跳过/取消）或草稿的不动
+        from .labels import _matches_task
+        untouched = {r["data"]["image_id"]: r["id"] for r in client.list_tasks(ls["project_id"])
+                     if _matches_task(r, _project_name(c.directory), task) and r["data"].get("image_id") in cands
+                     and not (r.get("total_annotations") or r.get("cancelled_annotations") or r.get("annotations") or r.get("drafts"))}
+        for key, remote_id in list(untouched.items())[:limit]:
+            client._request("DELETE", f"/api/tasks/{remote_id}")
+            existing.pop(key, None)
+            replaced += 1
+    todo = [k for k in sorted(cands) if k not in existing][:limit]
+    out = {"candidates": len(cands), "already_in_label_studio": len([k for k in cands if k in existing]),
+           "stale": sum(1 for v in cands.values() if v[0] == "stale"),
+           "rejected": sum(1 for v in cands.values() if v[0] == "rejected"),
+           "url": f"{ls['base_url']}/projects/{ls['project_id']}"}
+    if not todo:
+        return {**out, "pushed": 0, "boxes": 0, "replaced": replaced, "image_ids": []}
+    model_boxes, suspect = {}, {}   # suspect[key] = 模型在“标注时还没有的类别”上发现了疑似目标（哪怕把握很低）
+    if selector:
+        from .models import predict
+        paths = c.image_paths(todo)
+        # 用很低的门槛（5%）跑一遍：低于“预框置信度下限”的框不画，但用来判断这张图要不要人看
+        result = predict(c.directory, selector, paths, output=f"{c.job_id}-{c.step_id}-rereview.json",
+                         confidence=min(confidence, 0.05), device=device)
+        by_path = {str(Path(p["path"]).resolve()): p for p in result.get("predictions", [])}
+        for key, path in zip(todo, paths):
+            p = by_path.get(str(Path(path).resolve()), {})
+            w, h = p.get("width") or 1, p.get("height") or 1
+            new = set(classes) - set(cands[key][2])   # 只要标注时还没有的类别
+            suspect[key] = any(d.get("label") in new for d in p.get("detections") or [])
+            model_boxes[key] = [{"x": d["xyxy"][0] / w * 100, "y": d["xyxy"][1] / h * 100,
+                                 "width": (d["xyxy"][2] - d["xyxy"][0]) / w * 100,
+                                 "height": (d["xyxy"][3] - d["xyxy"][1]) / h * 100,
+                                 "rotation": 0, "rectanglelabels": [d["label"]], "_score": d.get("confidence")}
+                                for d in p.get("detections") or [] if d.get("label") in new and (d.get("confidence") or 0) >= confidence]
+    tasks = _make_tasks(c.directory, todo, local_files_root=ls.get("local_files_root"), media_base=ls.get("media_base"), task=task)
+    n_boxes = 0
+    for t in tasks:
+        key = t["data"]["image_id"]
+        res = []
+        for b in cands[key][1] + model_boxes.get(key, []):
+            b = dict(b)
+            score = b.pop("_score", None)
+            res.append({"from_name": "objects", "to_name": "image", "type": "rectanglelabels", "value": b,
+                        **({"score": score} if score is not None else {})})
+        n_boxes += len(res)
+        if preselect:   # 预选确认：有框 = 框都画完了；没框 = 图里没有目标（打开后看一眼，不对就改）
+            res.append({"from_name": "coverage", "to_name": "image", "type": "choices",
+                        "value": {"choices": ["Targets reviewed" if res else "No target"]}})
+        # 预测版本名按批次区分：在 Label Studio 任务列表里按 “Prediction model versions” 筛选，就能只整批确认其中一批
+        batch = "加类别前的旧标注" if cands[key][0] == "stale" else "以前没收进来的标注"
+        tag = "previously_rejected" if cands[key][0] == "rejected" else "stale"
+        if selector:   # 按模型结果再分：没发现新类别的可以整批确认；发现了的要人看一眼
+            batch += "·模型发现新类别（要看）" if suspect.get(key) else "·模型没发现新类别（可整批确认）"
+            tag = "look" if suspect.get(key) else "bulk_ok"
+        t["data"]["review_batch"] = tag   # 英文批次标记：Label Studio 里按它建标签页 / 筛选
+        t["predictions"] = [{"model_version": f"复核·{batch}" + (f" + {selector}" if selector else ""), "result": res}]
+        t["data"]["ailabel_label_schema"] = {"task": task, "classes": _classes(classes, task)}   # 这次复核按现在的全部类别
+    for i in range(0, len(tasks), 100):
+        client.import_tasks(ls["project_id"], tasks[i:i + 100])
+    _review_views(client, ls["project_id"], {t["data"]["review_batch"] for t in tasks})
+    return {**out, "pushed": len(tasks), "boxes": n_boxes, "replaced": replaced,
+            "model_found_new": sum(1 for k in todo if suspect.get(k)) if selector else None, "image_ids": todo}
+
+
+REVIEW_VIEWS = {"look": "复核·要看（模型发现新类别）", "bulk_ok": "复核·可整批确认（模型没发现新类别）",
+                "stale": "复核·加类别前的旧标注", "previously_rejected": "复核·以前没收进来的"}
+
+
+def _review_views(client, project_id, batches):
+    """在 Label Studio 项目里按批次建标签页（Data Manager 的 Tab），点一下就只看这一批；已有同名的不重复建。建不了不影响送图"""
+    try:
+        have = {v.get("data", {}).get("title") for v in (client._request("GET", "/api/dm/views/", query={"project": project_id}) or [])}
+        for tag in sorted(batches):
+            title = REVIEW_VIEWS.get(tag)
+            if title and title not in have:
+                client._request("POST", "/api/dm/views/", payload={"project": project_id, "data": {"title": title, "filters": {
+                    "conjunction": "and", "items": [{"filter": "filter:tasks:data.review_batch", "operator": "equal", "type": "String", "value": tag}]}}})
+    except Exception:
+        pass
 
 
 class PushPrelabel(Selection):
@@ -351,8 +619,10 @@ def push_prelabel(c, image_ids, selector="production", confidence=0.25, device="
 
 TOOLS.update({
     "curation.pick_type": Tool("按照片类型抽图", PickType, pick_type),
+    "curation.backfill_types": Tool("按照片类型补类别", BackfillTypes, backfill_types),
     "labels.ls_setup": Tool("连接 Label Studio", LsSetup, ls_setup),
     "labels.push_prelabel": Tool("送 Label Studio（带模型预框）", PushPrelabel, push_prelabel),
+    "labels.rereview": Tool("送回 Label Studio 复核（带已有的框）", Rereview, rereview),
 })
 
 
@@ -899,6 +1169,24 @@ NODES = {
             "image_id": P("图片 ID", "图片内容的 SHA-256", "text", ""),
             "max_distance": P("最大哈希距离", "越小越严格，6 左右合适", "number", 6, min=0, max=16, step=1),
             "limit": P("最多返回几张", "", "number", 30, min=1, max=100, step=1)}},
+    "types.classify_by_weights": {
+        "title": "按权重给照片类型归类",
+        "desc": "用一个 YOLO 模型（当前子项目的模型，或一个权重文件）扫**“照片类型”页的全部照片**（全平台共用，不属于哪个子项目），"
+                "按规则“权重里的这些类别 → 这个照片类型”给出**建议**。可以设多条规则（比如 grounding_bar → 接地/防雷；rust → 站内地面），一张图中了多条取置信度最高的。"
+                "已经人工确认过类型的照片不扫、不改。建议**不算人工确认**：到“照片类型”页各类型的「权重建议」里看图，整批确认或忽略。扫过的会记住，再运行接着扫。",
+        "inputs": [], "outputs": [],
+        "params": {
+            "model": P("用当前子项目的模型（可不填）", "填模型版本或别名，如 latest；填了就不用下面的权重文件", "model", ""),
+            "weights": P("权重", "或者用一个现成的 YOLO 权重文件（检测、分类都行）", "weights"),
+            "rules": P("归类规则", "每条：勾选权重里的类别 → 选一个照片类型；可以加多条。一张图中了多条规则，取置信度最高的那条", "typerules", ""),
+            "scope_types": P("只扫这些类型里的照片（可不选）", "只扫现在归在这些照片类型里的照片（比如只扫“其他/无关”）；都不选 = 扫全部照片", "phototypes", ""),
+            "min_confidence": P("最低置信度", "目标的把握分数低于它就不算；0.5 稳妥，调低建议多但误判也多", "number", 0.5, min=0.05, max=0.95, step=0.05),
+            "min_boxes": P("至少几个目标", "一张图里至少检出几个才算（分类权重忽略这项）", "number", 1, min=1, max=100, step=1),
+            "scan_limit": P("本次最多扫多少张", "没扫完的下次运行接着扫。显卡上约每分钟几千张", "number", 20000, min=100, max=500000, step=1000),
+            "imgsz": P("推理尺寸", "640 常用；目标很小用 960", "number", 640, min=160, max=2048, step=32),
+            "batch": P("批大小", "", "number", 16, min=1, max=128, step=1),
+            "device": P("设备", "0 = 显卡，cpu = 处理器（很慢）", "combo", "0", values=["0", "cpu"]),
+            "restart": P("从头扫", "勾选 = 忘掉之前扫过的记录，全部重扫", "toggle", False)}},
     "curation.find_by_model": {
         "title": "用权重找图", "desc": "选一个现成的 YOLO 权重（如 yolov8n.pt），去扫服务器上的海量原图，把**含目标的照片**挑出来复制进项目（源文件不动），"
                 "并生成复核单看框。扫过的会记住，**再运行就接着往下扫**（断点续扫）。",
@@ -927,8 +1215,15 @@ NODES = {
             "batch": P("批大小", "一次送几张给显卡，16 即可", "number", 16, min=1, max=128, step=1),
             "device": P("设备", "0 = 显卡，cpu = 处理器（很慢）", "combo", "0", values=["0", "cpu"]),
             "restart": P("从头扫", "勾选 = 忘掉之前扫过的记录，从第一张重新扫", "toggle", False)}},
+    "curation.backfill_types": {
+        "title": "按照片类型补类别", "desc": "给子项目里**已有**的图补上类别，按“照片类型”页的归类结果：以前“按照片类型抽图”抽进来的图（按内容对），以及直接扫描原图目录收进来的图（按路径对）。"
+                "在“照片类型”页人工确认过的 → 本子项目已确认；只是模型预测的 → 归到这类、待复核。本子项目已经人工确认过的图不动；“其他/无关”不补。缺的类别自动加上。",
+        "inputs": [], "outputs": [],
+        "params": {
+            "only_confirmed": P("只补人工确认过的", "勾选 = 只补“照片类型”页人工确认过的（最准）；不勾 = 模型预测的也补上，标成待复核", "toggle", False),
+            "dry_run": P("只统计，不写入", "勾选 = 先看看能补多少张、各是什么类型，不改任何东西", "toggle", False)}},
     "curation.pick_type": {
-        "title": "按照片类型抽图", "desc": "从原始图片里按照片类型（⑤类型归类的结果：人工确认优先，否则模型预测）随机抽 N 张，**复制**进当前子项目。抽过的不会重复抽。",
+        "title": "按照片类型抽图", "desc": "从原始图片里按照片类型（⑤类型归类的结果：人工确认优先，否则模型预测）随机抽 N 张，**复制**进当前子项目，**类别一起带过来**：在“照片类型”页人工确认过的直接算本子项目已确认（可马上训练照片分类器），只是模型预测的归到这类、待复核。子项目还没有这个类别会自动加上。抽过的不会重复抽。",
         "inputs": [], "outputs": [{"name": "图片", "type": "IMAGES", "field": "image_ids"}],
         "params": {
             "photo_type": P("照片类型", "从“照片类型”页的归类结果里抽（括号里是这类有多少张）；类型不准就先去“照片类型”页确认、重新训练", "phototype", "site_ground"),
@@ -941,7 +1236,24 @@ NODES = {
         "params": {
             "base_url": P("Label Studio 地址", "引擎在服务器上访问的地址", "text", "http://127.0.0.1:8081"),
             "title": P("项目名（可不填）", "不填 = “LOTA · 子项目名”"),
-            "token_env": P("令牌环境变量名", "引擎从这个环境变量读 Label Studio 令牌（放在服务器 LOTA/.env）", "text", "LABEL_STUDIO_TOKEN")}},
+            "token_env": P("令牌环境变量名", "引擎从这个环境变量读 Label Studio 令牌（放在服务器 LOTA/.env）", "text", "LABEL_STUDIO_TOKEN"),
+            "new": P("新建一个（替换现在的）", "勾选 = 已经连接过也按现在的类别新建一个 Label Studio 项目并切换过去。子项目加了新类别、或旧项目没有 Targets reviewed 选项时用；旧项目留在 Label Studio 里不动，里面的标注可以用“送回复核”带过来", "toggle", False)}},
+    "labels.rereview": {
+        "title": "送回 Label Studio 复核（带已有的框）",
+        "desc": "子项目**加了新类别**后，以前的标注没检查过新类别，不能直接进数据集；以前 Label Studio 项目里**收不进来**的标注（类别名对不上、没选 Targets reviewed）也要重新确认。"
+                "这个节点把这些图**带着已有的框**送进当前 Label Studio 项目：打开就有框，补画新类别、改错框，选 **Targets reviewed** 提交即可。"
+                "选了模型的话，还会用它给“标注时还没有的类别”预画框（先用少量新类别标注训一个模型，再用它补查旧图）。已在当前 Label Studio 项目里的图不重复送。",
+        "inputs": [], "outputs": [{"name": "图片", "type": "IMAGES", "field": "image_ids"}],
+        "params": {
+            "which": P("送哪些", "all = 全部；stale = 加新类别前已通过的旧标注；rejected = 以前回收没通过、但有框的", "combo", "all", values=["all", "stale", "rejected"]),
+            "selector": P("给新类别预画框的模型（可不填）", "填模型版本或别名（如 latest）；不填 = 只带已有的框。选了模型，任务会按模型结果分成两批："
+                          "“模型没发现新类别（可整批确认）”和“模型发现新类别（要看）”，在 Label Studio 里按预测版本筛选，前一批可以整批确认", "model", ""),
+            "confidence": P("预框置信度下限", "", "number", 0.25, min=0.05, max=0.95, step=0.05),
+            "device": P("设备", "0 = GPU", "combo", "0", values=["0", "cpu"]),
+            "limit": P("一次最多送几张", "", "number", 1000, min=1, max=1000, step=50),
+            "preselect": P("预选 Targets reviewed", "勾选 = 有框的预先选好 Targets reviewed、没框的预选 No target：打开看一眼直接提交（Ctrl+Enter），"
+                           "或在 Label Studio 任务列表全选 → Actions → Create Annotations From Predictions 整批确认。整批确认等于不看就认可，只对你确定没问题的批次用", "toggle", True),
+            "replace": P("替换还没人标过的任务", "勾选 = 已经送进当前 Label Studio 项目、但还没人标过的任务删掉重送（换成新的预填，比如加了预选、换了模型）；已经有人标过的不动", "toggle", False)}},
     "labels.push_prelabel": {
         "title": "送 Label Studio（带模型预框）", "desc": "用模型先把框画好，再把图片送进 Label Studio。打开图片就有框：删错框、补漏框、调边界，最后选 **Targets reviewed**（有目标）或 **No target**（没有目标）再提交。已经送过的图不会重复送。",
         "inputs": [{"name": "图片", "type": "IMAGES", "arg": "image_ids"}],
@@ -976,6 +1288,18 @@ TEMPLATES = {
             {"id": "classify", "tool": "sorting.classify", "pos": [560, 300], "args": {"hints_path": str(deploy.LEGACY_PIPELINE / "work/emb/pred.json")}},
         ],
         "links": [["scan", 0, "candidates", 0], ["candidates", 0, "quality", 0], ["quality", 0, "duplicates", 0], ["duplicates", 0, "classify", 0]],
+    },
+    "pick-type-confirmed": {
+        "name": "从照片类型抽已确认的图：接地/防雷 → 复制进子项目（类别一起带过来）",
+        "desc": "从“照片类型”页把人工确认过的“接地/防雷（grounding_lightning）”照片抽进当前子项目，类别直接算已确认，不用重新分拣；"
+                "子项目没有这个类别会自动加上。抽过的不会重复抽：以后在“照片类型”页又确认了新图，再运行一次就只抽新的。"
+                "要抽别的类型，改“照片类型”这一项就行。",
+        "simple": [["pick", "photo_type"], ["pick", "only_confirmed"], ["pick", "limit"]],
+        "nodes": [
+            {"id": "pick", "tool": "curation.pick_type", "pos": [40, 40],
+             "args": {"photo_type": "grounding_lightning", "only_confirmed": True, "limit": 1000, "seed": 42}},
+        ],
+        "links": [],
     },
     "find-route": {
         "name": "按目标分流：读取图库 → 检测指定目标（已注册模型）→ 命中的分流到目录",
@@ -1079,9 +1403,9 @@ NODE_GROUPS = [
     ("② 分拣与筛图", ["sorting.candidates", "sorting.quality", "sorting.vlm_check", "sorting.duplicates", "catalog.near", "catalog.review",
                      "catalog.reject", "catalog.delete", "curation.pick_type", "curation.find_by_model", "selection.find",
                      "workflow.route", "selection.files"]),
-    ("③ 照片分类", ["curation.suggest", "curation.confirm", "curation.unconfirm", "curation.train", "curation.reclassify",
+    ("③ 照片分类", ["types.classify_by_weights", "curation.suggest", "curation.backfill_types", "curation.confirm", "curation.unconfirm", "curation.train", "curation.reclassify",
                    "sorting.classify"]),
-    ("④ 标注", ["labels.ls_setup", "labels.ls_guide", "labels.push", "labels.push_prelabel", "labels.pull", "labels.import",
+    ("④ 标注", ["labels.ls_setup", "labels.ls_guide", "labels.push", "labels.push_prelabel", "labels.rereview", "labels.pull", "labels.import",
                "labels.import_yolo", "labels.ls_video", "labels.ls_webhook", "quality.mistakes"]),
     ("⑤ 数据集与训练", ["image.enhance", "dataset.publish", "model.train", "model.train_classic", "model.train_semseg",
                       "model.register", "model.evaluate", "model.alias"]),
@@ -1367,3 +1691,8 @@ def _pose_cfg(c):
     from .labels import _KP, label_config, pose_keypoints
     _KP.set(pose_keypoints(c.directory))
     return label_config(list(c.scenario.classes), "pose")
+
+
+# 按权重给“照片类型”归类（全平台照片，模型建议待确认）
+from .typesuggest import ClassifyTypes, classify_types  # noqa: E402
+TOOLS["types.classify_by_weights"] = Tool("按权重给照片类型归类", ClassifyTypes, classify_types)

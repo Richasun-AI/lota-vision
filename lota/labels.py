@@ -216,12 +216,24 @@ def _choices(item):
     return choices[0]
 
 
+def _class_name(names, classes):
+    """Label Studio 里的标签名 → 子项目类别代码。完全一致直接用；否则转小写、空格/短横线换成下划线再对
+    （类别代码不能有空格，Label Studio 里常写成 “grounding bar” 这样）。对不上返回 None。"""
+    if not isinstance(names, list) or len(names) != 1 or not isinstance(names[0], str):
+        return None
+    name = names[0]
+    if name in classes:
+        return name
+    code = re.sub(r"[\s-]+", "_", name.strip().lower())
+    return code if code in classes else None
+
+
 def _box(item, classes, image):
     value = item.get("value")
     if not isinstance(value, dict):
         raise ValueError("Rectangle has no value object")
-    names = value.get("rectanglelabels")
-    if not isinstance(names, list) or len(names) != 1 or names[0] not in classes:
+    names = [_class_name(value.get("rectanglelabels"), classes)]
+    if names[0] is None:
         raise ValueError("Rectangle class is unknown or ambiguous")
     try:
         x, y, width, height = (float(value[key]) for key in ("x", "y", "width", "height"))
@@ -259,8 +271,8 @@ def _poly(item, classes, image):
         name, cx, cy, w, h = _box(item, classes, image)
         x1, y1, x2, y2 = cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2
         return [name, *[round(v, 8) for v in (x1, y1, x2, y1, x2, y2, x1, y2)]]
-    names = value.get("polygonlabels")
-    if not isinstance(names, list) or len(names) != 1 or names[0] not in classes:
+    names = [_class_name(value.get("polygonlabels"), classes)]
+    if names[0] is None:
         raise ValueError("Polygon class is unknown or ambiguous")
     points = value.get("points")
     if not isinstance(points, list) or len(points) < 3:
@@ -279,8 +291,8 @@ def _obb(item, classes, image):
     value = item.get("value")
     if not isinstance(value, dict):
         raise ValueError("Rectangle has no value object")
-    names = value.get("rectanglelabels")
-    if not isinstance(names, list) or len(names) != 1 or names[0] not in classes:
+    names = [_class_name(value.get("rectanglelabels"), classes)]
+    if names[0] is None:
         raise ValueError("Rectangle class is unknown or ambiguous")
     W = float(item.get("original_width") or image.get("width") or 0)
     H = float(item.get("original_height") or image.get("height") or 0)
@@ -379,8 +391,9 @@ def _interpret(results, classes, task, image):
         raise ValueError("Unknown classification coverage choice")
     if not names:
         return "unlabeled", [], "No category selected"
-    if len(set(names)) != 1 or names[0] not in classes:
+    if len(set(names)) != 1 or _class_name(names[:1], classes) is None:
         raise ValueError("Category is unknown or ambiguous")
+    names = [_class_name(names[:1], classes)]
     if coverage != "Category reviewed":
         return "unlabeled", [], "Confirm the single image category"
     return "accepted", [names[0]], ""
@@ -453,6 +466,11 @@ def import_annotations(project_dir, tasks, classes, *, task="detect"):
             if any(entry[1][:2] != decision[:2] for entry in entries[1:]):
                 decision = "needs_review", [], "Export contains conflicting tasks for this image"
             status, labels, reason = decision
+            if status == "unlabeled" and reason == "No completed annotation" and connection.execute(
+                    "SELECT 1 FROM current_annotations WHERE task = ? AND image_id = ?", (task, image_id)).fetchone():
+                # Label Studio 里还没人标的任务（比如刚“送回复核”的），不能覆盖这张图已有的标注记录
+                counts["kept_existing"] += 1
+                continue
             original = _dump(source[0] if len(source) == 1 else source)
             revision = _sha(_dump([source, decision]).encode())
             connection.execute(
