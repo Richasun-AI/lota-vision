@@ -187,3 +187,8 @@ dialog.viewer .dialog-body { padding: .6rem .9rem; }
 .pagination .actions { align-items: center; flex-wrap: wrap; }
 .pagination .page-jump { width: 5em; }
 .pagination select { width: auto; }
+
+/* 关键操作点的避坑提示 */
+.pitfall { margin: 10px 0; }
+.pitfall ul { margin: 6px 0 0; padding-left: 20px; }
+.pitfall li { margin: 3px 0; line-height: 1.55; }

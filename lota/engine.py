@@ -122,6 +122,12 @@ class Engine:
                 current = step.id
                 self.store.checkpoint(job["id"], worker, outputs, current)
                 args = resolve_values(step.args, outputs, job["inputs"])
+                ref = step.args.get("image_ids") if isinstance(step.args, dict) else None
+                if isinstance(ref, dict) and "$ref" in ref and args.get("image_ids") == []:
+                    # 上一步没有找到 / 产出图片：这一步没东西可做，跳过（不算失败），后面的步骤照常
+                    outputs[current] = {"image_ids": [], "skipped": "上一步没有图片，这一步跳过"}
+                    self.store.checkpoint(job["id"], worker, outputs, current)
+                    continue
                 context = Context(directory, config, self, job["id"], current)
                 outputs[current] = TOOLS[step.tool].call(context, args)
                 self.store.checkpoint(job["id"], worker, outputs, current)
@@ -173,7 +179,8 @@ def lookup(root, address):
             root = root[int(key)] if isinstance(root, list) else root[key]
         return root
     except (KeyError, IndexError, TypeError, ValueError) as exc:
-        raise ValueError(f"Workflow reference not found: {address}") from exc
+        raise ValueError(f"工作流里找不到 {address}：可能连线连到了已经删除的节点，或上一步没有这个输出。"
+                         f"到工作流页面重新连线、保存后再运行 / Workflow reference not found: {address}") from exc
 
 
 def resolve_values(value, outputs, inputs):

@@ -512,7 +512,9 @@ def evaluate(project_dir: Path, selector: str, dataset_version: str, *, split: s
     metadata, weights = resolve_model(project_dir, selector)
     manifest, directory = _dataset(project_dir, dataset_version)
     if (metadata["task"], metadata["classes"]) != (manifest["task"], manifest["classes"]):
-        raise ValueError("The model and evaluation dataset must share task and class IDs")
+        raise ValueError(f"模型 {selector} 的类别 {metadata['classes']} 和数据集 {dataset_version} 的类别 {manifest['classes']} 不一样，"
+                         "没法用这个数据集考它（比如加类别前训练的旧模型）。比较模型要用同一套类别的数据集"
+                         " / The model and evaluation dataset must share task and class IDs")
     if not manifest.get("counts", {}).get(split):
         raise ValueError(f"Dataset {dataset_version} has no {split} examples")
     options = _options(params, _EVALUATE_OPTIONS, {"workers": 0, "plots": False})

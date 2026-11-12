@@ -274,5 +274,19 @@
  "权重 {0} 检出 {1}": "Weights {0} detected {1}",
  "未排除的（默认）": "Not excluded (default)",
  "全部（含已排除）": "All (incl. excluded)",
- "已排除（默认不显示）": "Excluded (hidden by default)"
+ "已排除（默认不显示）": "Excluded (hidden by default)",
+ "⚠️ 避坑": "⚠️ Pitfalls",
+ "💡 建议固定考试集": "💡 Tip: freeze an exam set",
+ "📌 固定为考试集": "📌 Freeze as exam set",
+ "取消固定": "Unfreeze",
+ "固定考试集": "Freeze exam set",
+ "📌 考试集已固定：{0} 张": "📌 Exam set frozen: {0} images",
+ "标注规范": "Labeling guideline",
+ "保存并同步到 Label Studio": "Save and sync to Label Studio",
+ "随机抽查比例": "Random spot-check ratio",
+ "⚠️ 避坑清单（业界经验）": "⚠️ Pitfall checklist (industry practice)",
+ "已固定考试集：{0} 张": "Exam set frozen: {0} images",
+ "已取消固定考试集": "Exam set unfrozen",
+ "标注规范已保存；{0}": "Guideline saved; {0}",
+ "用哪一版数据集的测试集": "Use the test split of which dataset version"
 }

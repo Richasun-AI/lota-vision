@@ -169,3 +169,8 @@ details.adv > summary { cursor: pointer; color: var(--ink-2); font-weight: 600; 
 /* 代码块 */
 pre.code { background: #0f1f19; color: #d7f0e4; padding: 12px 14px; border-radius: 10px; overflow: auto; font: 12.5px/1.5 var(--mono); margin: 8px 0; }
 input[type=range], input[type=checkbox], input[type=radio] { accent-color: var(--brand-600); }
+
+/* 关键操作点的避坑提示 */
+.pitfall { margin: 10px 0; }
+.pitfall ul { margin: 6px 0 0; padding-left: 20px; }
+.pitfall li { margin: 3px 0; line-height: 1.55; }

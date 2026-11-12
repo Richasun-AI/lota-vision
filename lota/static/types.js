@@ -129,7 +129,9 @@ async function drawMain() {
       !t.bin ? h("button", { class: "btn sm", onclick: () => act(S.types.find((x) => x.bin).key, "放进临时仓库") }, "🗃️ 放进临时仓库") : null,
       h("button", { class: "btn sm danger", title: "把原图从服务器原目录里删掉（先进回收站，可恢复）", onclick: () => { if (!sel.size) return UI.toast("先点选照片（可多选）", true); delDlg([...sel]); } }, "🗑️ 删除所选")));
   const grid = h("div", { class: "pgrid" });
-  main.replaceChildren(bar, grid, h("div", { id: "pager", class: "row", style: { marginTop: "12px" } }));
+  const tip = view === "suggested" && mode === "browse" ? UI.pitfall(["这些是模型按权重给的建议，还没人看过。先双击抽看几张（尤其置信度低的），确定没问题再整批「确认为本类」；确认后会成为照片类型分类器的样板，错的也会被学进去。",
+    "不对的选中后点「✕ 忽略所选建议」，以后不会再建议成本类型。"]) : null;
+  main.replaceChildren(bar, ...(tip ? [tip] : []), grid, h("div", { id: "pager", class: "row", style: { marginTop: "12px" } }));
   let items, total;
   if (mode === "similar") {
     grid.replaceChildren(h("div", { class: "muted small" }, "在其他类型里找和本类已确认照片最像的…"));

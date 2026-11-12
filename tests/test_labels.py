@@ -81,6 +81,23 @@ class AnnotationTest(unittest.TestCase):
         again = labels.publish_dataset(self.project, "v1", ["gate"])
         self.assertEqual(again["dataset_id"], manifest["dataset_id"])
 
+    def test_frozen_holdout_stays_in_test_split(self):
+        ids = [self.image(10 + i, f"site-{i}") for i in range(8)]
+        labels.import_annotations(self.project, [self.task(i, [box(), choice("Targets reviewed")]) for i in ids[:6]], ["gate"])
+        first = labels.publish_dataset(self.project, "r1", ["gate"], val_fraction=0.2, test_fraction=0.2)
+        test = {row["image_id"] for row in first["images"] if row["split"] == "test"}
+        self.assertTrue(test)
+        frozen = labels.freeze_holdout(self.project, "r1")
+        self.assertEqual(frozen["count"], len(test))
+        labels.import_annotations(self.project, [self.task(i, [box(), choice("Targets reviewed")]) for i in ids[6:]], ["gate"])
+        for seed in (1, 2, 3):   # 换随机种子、加了新图，考试集都还在测试集里，新图不会进测试集
+            again = labels.publish_dataset(self.project, f"r{seed + 1}", ["gate"], val_fraction=0.2, test_fraction=0.2, seed=seed)
+            split = {row["image_id"]: row["split"] for row in again["images"]}
+            self.assertEqual({i for i, s in split.items() if s == "test"}, test)
+            self.assertEqual(again["holdout"], len(test))
+        labels.freeze_holdout(self.project, "r1", clear=True)
+        self.assertFalse(labels.holdout_info(self.project)["enabled"])
+
     def test_classification_groups_and_class_ids_are_stable(self):
         tasks = []
         for i in range(6):

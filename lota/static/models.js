@@ -221,6 +221,10 @@ async function trainWizard(preDs) {
       field("图像大小 imgsz", imgsz, "目标很小就选 960")),
     field("模型名称", name, null), nameHelp,
     field("在哪训练", where), whereBody,
+    UI.pitfall([
+      "训练完会自动设为“最新”，但不会自动上线。先在同一个考试集上和旧模型比一比，确实更好再点「设为正式使用」。",
+      "这一版数据如果有新加的类别、或整批确认过的标注，先抽看几张，错的标注会被模型学进去。",
+      "成绩连续两三轮涨不动了，就别再加同类的图，去补成绩差的类别或场景。"]),
     h("div", { class: "small muted" }, "学习率、提前停止、数据增强等专业参数：点左下角「详细设置」，或在 ", h("a", { href: "/settings" }, "项目设置"), " 里统一改。"));
   where.onchange = showWhere;
   update(); showWhere();
@@ -404,7 +408,8 @@ async function evaluate(pid, m) {
     h("label", {}, h("input", { type: "radio", name: "split", value: "val", checked: true }), h("b", {}, "验证集"), h("span", {}, "训练时没用过的图")),
     h("label", {}, h("input", { type: "radio", name: "split", value: "test" }), h("b", {}, "测试集"), h("span", {}, "完全独立，最能代表真实效果")));
   const body = h("div", { class: "form" }, h("div", { class: "field" }, h("label", {}, "用哪个数据集考试"), dsSel), h("div", { class: "field" }, h("label", {}, "考哪部分"), split),
-    h("div", { class: "callout warn" }, "注意：不要用训练过的图来考，否则分数会虚高。不同模型用同一个数据集、同一部分来比才公平。"));
+    UI.pitfall(["不要用训练过的图来考，否则分数会虚高。", "不同模型要用同一个数据集、同一部分（最好是固定的考试集）来比才公平；数据集页可以「📌 固定为考试集」。",
+      "加类别前训练的旧模型和新数据集类别不一样，没法拿来比。"]));
   UI.modal(`评估 ${m.version}`, body, [{ label: "取消" }, { label: "开始评估", kind: "primary", run: async () => {
     const sp = body.querySelector("input[name=split]:checked").value;
     const d = datasets.find((x) => x.version === dsSel.value);

@@ -1,13 +1,15 @@
 // 数据集：每个版本有多少图、多少框、怎么划分、类别分布、样例（带框）；一键把最新标注打包成新版本
 "use strict";
 const { h } = UI;
-let SETTINGS = {};
+let SETTINGS = {}, HOLD = { enabled: false };
 const SPLIT = { train: ["训练", "#1d6d52"], val: ["验证", "#1d5fd1"], test: ["测试", "#c2410c"] };
 
 async function render() {
   const pid = UI.project(), app = document.getElementById("app");
-  const [{ datasets, accepted_annotations }, { settings }] = await Promise.all([
-    UI.api(`/api/projects/${pid}/hub/datasets`), UI.api(`/api/projects/${pid}/settings`)]);
+  const [{ datasets, accepted_annotations }, { settings }, hold] = await Promise.all([
+    UI.api(`/api/projects/${pid}/hub/datasets`), UI.api(`/api/projects/${pid}/settings`),
+    UI.api(`/api/projects/${pid}/hub/holdout`).catch(() => ({ enabled: false }))]);
+  HOLD = hold;
   const last = datasets[0], more = Math.max(0, accepted_annotations - (last?.image_total || 0));
   const info = UI.projectInfo(pid);
   SETTINGS = settings;
@@ -24,6 +26,13 @@ async function render() {
     h("div", { class: "callout", style: { marginTop: "14px" } },
       h("b", {}, "三部分各管什么："), " 「训练」给模型学；「验证」训练时用来挑最好的那一轮；「测试」完全不参与训练，专门用来公平地比较不同模型。",
       `比例在项目设置里统一改（现在：验证 ${Math.round(settings.split.val * 100)}%、测试 ${Math.round(settings.split.test * 100)}%）。同一站点/重复照片只会分到同一部分，避免“考题泄露”。`),
+    HOLD.enabled
+      ? h("div", { class: "callout ok", style: { marginTop: "10px" } }, h("b", {}, `📌 考试集已固定：${HOLD.count} 张`),
+          `（来自 ${HOLD.from_dataset}，${HOLD.created || ""}）。以后每一版的测试集都包含这些图，不同版本训练出的模型可以直接比成绩。`,
+          h("button", { class: "btn sm", style: { marginLeft: "8px" }, onclick: async () => {
+            if (!confirm("取消固定考试集？以后打包会重新按比例随机分测试集，新旧版本的成绩就不能直接比了。")) return;
+            await UI.runTool(pid, "dataset.freeze_test", { clear: true }); UI.toast("已取消固定考试集"); render(); } }, "取消固定"))
+      : UI.pitfall(["每一版数据集的测试集都不一样，r1、r2 的成绩不能直接比。在某一版（最好图多、各类都有）的卡片上点「📌 固定为考试集」，以后每版都用同一份考试集。"], "💡 建议固定考试集"),
     h("div", { class: "section-title" }, h("h2", {}, "全部版本")),
     datasets.length ? h("div", { class: "grid", style: { gap: "12px" } }, datasets.map((d) => dsCard(pid, d)))
       : h("div", { class: "empty" }, "还没有数据集。先在 Label Studio 标注并回收，再点右上角「打包最新标注」。"),
@@ -51,7 +60,11 @@ function dsCard(pid, d) {
           e.target.disabled = true; e.target.textContent = "打包中…";
           try { const u = await UI.blobUrl(`/api/projects/${pid}/datasets/${d.version}/download`); const a = h("a", { href: u, download: d.version + ".zip" }); document.body.append(a); a.click(); a.remove(); }
           catch (err) { UI.toast(err.message, true); } finally { e.target.disabled = false; e.target.textContent = "下载 zip"; } } }, "下载 zip"),
-        h("a", { class: "btn sm", href: "/models?train=" + encodeURIComponent(d.version) }, "用它训练"))),
+        h("a", { class: "btn sm", href: "/models?train=" + encodeURIComponent(d.version) }, "用它训练"),
+        d.counts?.test ? h("button", { class: "btn sm", title: "以后每次打包，这一版测试集里的图都放进测试集，各版本的成绩才能直接比", onclick: async () => {
+          if (!confirm(`把 ${d.version} 的测试集（${d.counts.test} 张）固定为考试集？以后每一版都会用它来考。`)) return;
+          const r = await UI.runTool(pid, "dataset.freeze_test", { dataset_version: d.version }); UI.toast(`已固定考试集：${r.count} 张`); render(); } }, "📌 固定为考试集") : null)),
+    negWarn(d),
     h("div", { class: "grid k4", style: { marginTop: "12px" } },
       mini("图片", d.image_total), mini("标注框", d.box_total), mini("无目标图（负样本）", d.empty_images), mini("排除", Object.values(d.excluded || {}).reduce((a, b) => a + (typeof b === "number" ? b : 0), 0))),
     h("div", { style: { marginTop: "12px" } }, bar,
@@ -60,6 +73,12 @@ function dsCard(pid, d) {
       ...Object.entries(classes).sort((a, b) => b[1] - a[1]).map(([c, n]) => h("div", { class: "score" }, h("span", { class: "mono" }, c),
         h("div", { class: "meter" }, h("i", { style: { width: (n / maxC * 100) + "%" } })), h("span", { class: "v" }, n)))) : null);
 }
+// 负样本（No target 图）太少：模型容易到处误报
+function negWarn(d) {
+  const total = d.image_total || 0, neg = d.empty_images || 0;
+  if (!total || d.task === "classify" || neg / total >= 0.05) return null;
+  return UI.pitfall([`负样本（选 No target 的图）只有 ${neg} 张（${Math.round(neg / total * 100)}%）。只标有目标的图，模型容易把相似的东西都当成目标（误报）。建议补一些确实没有目标的现场照片，占 10% 左右。`]);
+}
 function mini(label, v) { return h("div", {}, h("div", { class: "small muted" }, label), h("div", { style: { fontSize: "18px", fontWeight: 700 } }, v ?? 0)); }
 
 async function publish(pid, settings) {
@@ -67,7 +86,11 @@ async function publish(pid, settings) {
   UI.modal("打包最新标注为新数据集", h("div", { class: "form" },
     h("p", {}, h("strong", {}, `子项目：${UI.projectInfo(pid)?.config?.name || pid}（${pid}）`)),
     h("p", {}, `会把所有已复核的标注打包成一个新版本，按“${name}”自动编号；验证 ${Math.round(settings.split.val * 100)}%、测试 ${Math.round(settings.split.test * 100)}%（随机种子 ${settings.split.seed}，同一张图每次都分到同一部分）。`),
-    h("div", { class: "callout" }, "如果 Label Studio 里还有刚提交、没回收的标注，先在工作流里跑一次「回收标注」，或用「主动学习一轮」模板（它会先回收）。")),
+    h("div", { class: "callout" }, "如果 Label Studio 里还有刚提交、没回收的标注，先在工作流里跑一次「回收标注」，或用「主动学习一轮」模板（它会先回收）。"),
+    UI.pitfall([
+      HOLD.enabled ? `考试集已固定（${HOLD.count} 张），这一版的测试集会包含它们，成绩能和以前的版本直接比。` : "还没固定考试集：这一版的测试集和以前的不一样，成绩不能直接和旧版本比。打包后可以在卡片上「📌 固定为考试集」。",
+      "整批确认（不看就认可）过的标注也会被打包进来；如果有拿不准的批次，先抽几张看看再打包。",
+      "标注标准要统一（比如杂草框整片还是分块）。规范不统一时加数据也涨不动分，打包后用「找标注错误」查一查。"])),
     [{ label: "取消" }, { label: "回收并打包", kind: "primary", run: async () => {
       UI.toast("回收 Label Studio 标注…");
       try { await UI.runTool(pid, "labels.pull", {}); }

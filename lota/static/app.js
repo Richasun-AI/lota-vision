@@ -289,6 +289,27 @@ async function navigate(tab) {
   }
 }
 
+// 操作完只刷新内容：不清空页面、不回到顶部，已经加载好的缩略图直接搬过去（不重新下载、不闪）
+async function refresh(tab = state.tab) {
+  if (!state.project || state.tab !== tab) return;
+  const pages = {gallery: galleryPage, labels: labelsPage, datasets: datasetsPage,
+    models: modelsPage, workflows: workflowsPage, jobs: jobsPage};
+  const generation = ++state.generation, y = window.scrollY;
+  let content;
+  try { content = await pages[tab](); } catch (error) { notifyUser("刷新失败：" + error.message); return; }
+  if (generation !== state.generation) return;
+  const loaded = new Map();
+  for (const old of root.querySelectorAll(".photo-media[data-started]")) if (old.querySelector("img")) loaded.set(old.dataset.path, old);
+  for (const media of content.querySelectorAll?.(".photo-media") || []) {
+    const old = loaded.get(media.dataset.path);
+    if (old) { media.replaceChildren(...old.childNodes); media.dataset.started = "true"; }
+  }
+  disconnectThumbs();
+  root.replaceChildren(content);
+  if (tab === "gallery") observeThumbs();
+  window.scrollTo(0, y);
+}
+
 function connectionDialog() {
   const token = textInput(state.token, {type: "password", autocomplete: "off", placeholder: "使用服务配置的访问令牌"});
   openDialog("连接设置", formContent(field("访问令牌", token, "仅保存在当前浏览器标签页的会话中。"), "保存并连接", async () => {
@@ -568,7 +589,7 @@ function confirmExtract(project = state.project) {
     const job = await queueTool("catalog.extract", {image_ids: ids}, project);
     dialog.close();
     const result = await waitJob(project, job);
-    if (result && project.id === state.project?.id && state.tab === "gallery") navigate("gallery");
+    if (result && project.id === state.project?.id && state.tab === "gallery") refresh("gallery");
   });
   openDialog("确认抽取样本", node);
 }
@@ -637,7 +658,7 @@ async function galleryPage() {
   };
   return h("div", {},
     page("原图与分拣", "按站点和检查点复核样本，选中后抽取到当前场景。", h("div", {class: "actions"},
-      button("刷新", () => navigate("gallery")), button("扫描原图", () => toolDialog("catalog.scan"), "primary", {disabled: !project.active}))),
+      button("刷新", () => refresh("gallery")), button("扫描原图", () => toolDialog("catalog.scan"), "primary", {disabled: !project.active}))),
     h("div", {class: "metrics"}, stat("内容去重后", stats.total), stat("待复核", stats.review?.pending), stat("已排除（默认不显示）", stats.review?.rejected),
       stat("已抽取", stats.extracted), stat("来源路径", Object.values(stats.sources || {}).reduce((sum, x) => sum + x, 0))),
     panel(h("strong", {}, "选图步骤"),
@@ -787,7 +808,7 @@ function previewDialog(project, photo) {
   const cleanup = () => {
     dialog.classList.remove("viewer"); dialog.removeEventListener("keydown", keys);
     dialog.removeEventListener("close", onClose); dialog._viewerCleanup = null;
-    if (changed && state.tab === "gallery") navigate("gallery");
+    if (changed && state.tab === "gallery") refresh("gallery");
   };
   const onClose = () => cleanup();
   dialog._viewerCleanup = cleanup;
@@ -809,7 +830,7 @@ function reviewDialog(project, photo) {
     }, project);
     dialog.close();
     const result = await waitJob(project, job);
-    if (result && project.id === state.project?.id && state.tab === "gallery") navigate("gallery");
+    if (result && project.id === state.project?.id && state.tab === "gallery") refresh("gallery");
   });
   openDialog("复核 " + fileName(photo), form);
 }
@@ -893,6 +914,7 @@ async function toolDialog(id, preset = {}) {
         (c.accuracy != null ? " · 验证准确率 " + (c.accuracy * 100).toFixed(0) + "%" : "")]), info.classifiers[0].version);
     }
   }
+  if (TOOL_PITFALLS[id]) notes.push(pitfall(TOOL_PITFALLS[id]));
   const tasks = Object.keys(config.annotation_tasks || {});
   // 和新版工作流共用同一套参数定义：中文名、说明、下拉选项、推荐默认值（/api/nodes）
   const catalog = await nodeCatalog();
@@ -939,7 +961,7 @@ async function toolDialog(id, preset = {}) {
     trackJob(project, job, tool.title, (current) => {
       if (id === "curation.confirm") { selected(project).clear(); saveSelection(project); }   // 确认完清空勾选，方便选下一批
       if (id === "curation.backfill_types") backfillReport(project, current?.outputs?.result, args);
-      if (project.id === state.project?.id && state.tab === tab) navigate(tab);
+      if (project.id === state.project?.id && state.tab === tab) refresh(tab);
     });
   }), true);
 }
@@ -950,7 +972,10 @@ function addClassDialog(project = state.project) {
   openDialog("添加类别", formContent(h("div", {},
     h("p", {}, "现有类别：" + (project.config.classes || []).join("、")),
     field("新类别代码", code, "小写字母开头，只用小写字母、数字、下划线；Label Studio 里的标签写成 “grounding bar” 也能自动对应到 grounding_bar"),
-    h("p", {class: "small muted"}, "加了以后：①以前的标注没检查过新类别，要在“标注系统”里“送回复核”；②当前 Label Studio 项目里没有这个标签的话，页面会提示新建一个。")),
+    h("p", {class: "small muted"}, "加了以后：①以前的标注没检查过新类别，要在“标注系统”里“送回复核”；②当前 Label Studio 项目里没有这个标签的话，页面会提示新建一个。"),
+    pitfall(["加类别后直接训练会把模型教坏：旧图里有新目标却没框，模型会学成“这不是目标”。一定先把旧标注“送回复核”补查新类别。",
+      "补查旧图时，先用少量新类别标注训一个初版模型，再用它给旧图预画新类别的框，比人工从头找快得多。",
+      "类别只能在末尾追加，不要删、不要改名，否则已有标注和模型的类别编号会错位。"])),
     "添加", async () => {
       const v = code.value.trim().toLowerCase().replace(/[\s-]+/g, "_");
       if (!/^[a-z0-9][a-z0-9_.-]{0,63}$/.test(v)) throw Error("类别代码只能用小写字母、数字、下划线、点、短横线");
@@ -977,10 +1002,26 @@ function backfillReport(project, r, args) {
     r.dry_run && (r.confirmed || r.predicted) ? h("div", {class: "actions"}, button("确认写入", asyncClick(async () => {
       const job = await queueTool("curation.backfill_types", {...args, dry_run: false}, project, false);
       dialog.close();
-      trackJob(project, job, "按照片类型补类别", (done) => { backfillReport(project, done?.outputs?.result, {...args, dry_run: false}); if (state.tab === "gallery") navigate("gallery"); });
+      trackJob(project, job, "按照片类型补类别", (done) => { backfillReport(project, done?.outputs?.result, {...args, dry_run: false}); if (state.tab === "gallery") refresh("gallery"); });
     }), "primary")) : ""));
 }
 
+// 关键操作点的避坑提示
+function pitfall(items, title = "⚠️ 避坑") {
+  return h("div", {class: "panel callout pitfall"}, h("strong", {}, title), h("ul", {}, ...items.map((t) => h("li", {}, t))));
+}
+const TOOL_PITFALLS = {
+  "labels.rereview": ["整批确认（Create Annotations From Predictions）= 不看就认可：只用在“可整批确认”这一批；“要看”那批（含随机抽查的）一定逐张看。",
+    "模型预画的框最容易“顺手认可”：框歪了、漏了也照样提交，错误会一轮轮被模型学进去。",
+    "每张图要框全所有类别再选 Targets reviewed；图里确实没有目标才选 No target。"],
+  "labels.push_prelabel": ["预画的框只是建议：删错框、补漏框、调边界后再选 Targets reviewed，别看到有框就直接提交。",
+    "每张图要框全所有类别，不能只框模型画出来的那几种。"],
+  "curation.find_by_model": ["只挑“模型拿不准”的图，数据会越来越偏（模型自信地错的图永远挑不到）：挑图策略用 mixed，或每轮掺一些随机的。",
+    "“每个文件夹最多几张”设 3 左右，避免一堆同一站点、几乎一样的照片。"],
+  "dataset.publish": ["还没固定考试集的话，每一版测试集都不一样，成绩不能直接比；数据集页可以「📌 固定为考试集」。",
+    "负样本（No target 图）太少，模型容易误报；保持 10% 左右。"],
+  "curation.train": ["照片分类器只从人工确认过的照片学：每类至少 5 张、最好来自不同站点。"],
+};
 function toastWithAction(text, label, action, failure = false) {
   const item = h("div", {class: "toast has-action" + (failure ? " error" : "")}, h("span", {}, text),
     h("button", {type: "button", class: "toast-action", onclick: () => { item.remove(); action(); }}, label));
@@ -1011,12 +1052,12 @@ async function labelsPage(){
   const [ls,annotations]=await Promise.all([request(pathFor(project)+"/hub/ls-status").catch(e=>({connected:false,error:e.message})),request(pathFor(project)+"/annotations")]);
   // 直接排“回收标注”任务（不弹参数框），完成后刷新本页
   const pullNow=asyncClick(async()=>{const job=await queueTool("labels.pull",{},project,false);notifyUser("正在从 Label Studio 回收标注…");
-    trackJob(project,job,"回收标注",()=>{if(state.tab==="labels"&&state.project?.id===project.id)navigate("labels");});});
+    trackJob(project,job,"回收标注",()=>{if(state.tab==="labels"&&state.project?.id===project.id)refresh("labels");});});
   const autoPull=(on)=>asyncClick(async()=>{const job=await request(pathFor(project)+"/tools/labels.ls_webhook","POST",{enabled:on,engine_url:"http://127.0.0.1:8795"});
-    trackJob(project,job,on?"开启自动回收":"关闭自动回收",()=>{if(state.tab==="labels"&&state.project?.id===project.id)navigate("labels");});});
+    trackJob(project,job,on?"开启自动回收":"关闭自动回收",()=>{if(state.tab==="labels"&&state.project?.id===project.id)refresh("labels");});});
   const runAndRefresh=(tool,args,title,then)=>asyncClick(async()=>{
     const job=await request(pathFor(project)+"/tools/"+encodeURIComponent(tool),"POST",args);notifyUser("已提交「"+title+"」");
-    trackJob(project,job,title,async(done)=>{if(then)await then(done);if(state.tab==="labels"&&state.project?.id===project.id)navigate("labels");});});
+    trackJob(project,job,title,async(done)=>{if(then)await then(done);if(state.tab==="labels"&&state.project?.id===project.id)refresh("labels");});});
   // 类别：只能在末尾追加（删改会让已有标注的类别编号错位）；加了以后旧标注要“送回复核”检查新类别
   const classesPanel=panel(h("div",{class:"rail"},h("strong",{},"检测类别"),button("添加类别",()=>addClassDialog(project),"small")),
     h("p",{},(project.config.classes||[]).map((c,i)=>i+". "+c).join("　")),
@@ -1047,8 +1088,14 @@ async function labelsPage(){
       h("div",{class:"actions"},button("立即回收标注",pullNow,"primary"),
         ls.auto_pull?button("关闭自动回收",autoPull(false)):button("开启自动回收",autoPull(true))));
   }
+  const guide=await request(pathFor(project)+"/hub/guideline").catch(()=>({text:""}));
+  const guideText=h("textarea",{rows:6,style:"width:100%",placeholder:"例如：\n1. 杂草：一片连在一起的框成一个框，不要逐棵框；\n2. 接地排：只框铜排本体，不框连接线；\n3. 远处看不清（小于 20 像素）的不框；\n4. 图里一个目标都没有选 No target。"},guide.text||"");
+  const guidePanel=panel(h("strong",{},"标注规范"),
+    h("p",{class:"small muted"},"写清楚每个类别框到什么程度。保存后会同步成 Label Studio 的标注说明，标注员打开任务前先看到。规范不统一是分数卡住上不去的头号原因。"),
+    guideText,h("div",{class:"actions"},button("保存并同步到 Label Studio",asyncClick(async()=>{
+      const r=await request(pathFor(project)+"/hub/guideline","PUT",{text:guideText.value});notifyUser("标注规范已保存；"+r.label_studio);}),"primary")));
   return h("div",{},page("标注系统","从已抽取图片提交任务，保留人工复核结果。"),
-    annotationTaskPicker(),classesPanel,status,cfgPanel,reviewPanel,panel(button("提交所选图片",()=>toolDialog("labels.push")),button("回收标注（选参数）",()=>toolDialog("labels.pull")),
+    annotationTaskPicker(),classesPanel,status,cfgPanel,reviewPanel,guidePanel,panel(button("提交所选图片",()=>toolDialog("labels.push")),button("回收标注（选参数）",()=>toolDialog("labels.pull")),
     button("导入标注 JSON",()=>toolDialog("labels.import"))),
     h("details",{},h("summary",{},"标注明细（原始数据）"),code(annotations)));
 }
@@ -1107,7 +1154,7 @@ function cleanupDialog(project, action) {
     const r = done?.outputs?.result || {};
     notifyUser(action === "delete" ? `已删除 ${r.count ?? ids.length} 张` + (r.deleted_sources?.length ? `，连同 ${r.deleted_sources.length} 个原图文件` : "") :
       action === "unconfirm" ? `已移除 ${r.removed ?? 0} 张的类别` : `已处理 ${ids.length} 张`);
-    navigate("gallery");
+    refresh("gallery");
   }));
 }
 
@@ -1131,7 +1178,7 @@ function batchReviewDialog(project) {
     const done = await waitJob(project, job, 60);
     dialog.close();
     notifyUser(done ? `已复核 ${ids.length} 张：${{accepted: "已确认", rejected: "已排除", pending: "待复核"}[decision.value]}` : "还在处理中，稍后到“任务记录”查看");
-    navigate("gallery");
+    refresh("gallery");
   });
   openDialog("批量复核所选（" + ids.length + " 张）", form);
 }

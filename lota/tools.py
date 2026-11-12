@@ -119,7 +119,8 @@ class Context:
     def label_studio(self):
         connection = self.scenario.label_studio
         if connection is None:
-            raise ValueError("Configure a Label Studio connection for this scenario")
+            raise ValueError("这个子项目还没连接 Label Studio：到“标注系统”点“提交所选图片”一键连接，或运行“连接 Label Studio”"
+                             " / Configure a Label Studio connection for this scenario")
         return connection.model_dump(exclude_none=True)
 
 
@@ -347,6 +348,9 @@ def confirm_categories(c,**args):
 
 def train_categories(c,**args):
     from .learning import train
+    if not args.get("version"):   # 不填版本名：自动按时间起一个
+        import time
+        args["version"]="cls-"+time.strftime("%Y%m%d-%H%M%S")
     return train(c,**args)
 
 def rerun_categories(c,**args):

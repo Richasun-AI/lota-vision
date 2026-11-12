@@ -361,6 +361,18 @@ def register_routes(router, engine, directory):
         return {"ok": True}
 
 
+def guideline_html(text):
+    """标注规范（纯文字）→ Label Studio 标注说明（HTML）"""
+    from html import escape
+    return "<div style='font-size:14px;line-height:1.6'>" + escape(text).replace("\n", "<br>") + "</div>"
+
+
+def sync_guideline(cfg, text):
+    from .labels import LabelStudioClient
+    LabelStudioClient.from_config(cfg)._request("PATCH", f"/api/projects/{cfg['project_id']}", payload={
+        "expert_instruction": guideline_html(text), "show_instruction": bool(text.strip())})
+
+
 # ── 总览：所有子项目的状态 + Label Studio 协同进度 + 下一步建议 ─────────────────────
 def ls_config_check(label_config, classes, task="detect"):
     """Label Studio 项目的标注配置够不够用：每个类别都有对应标签（大小写、空格/下划线不敏感），有“Targets reviewed”确认选项"""
@@ -438,6 +450,33 @@ def suggestions(pid, cfg, s, ls, pipes, ms):
 
 
 def register_overview(router, engine, directory):
+    from fastapi import Body
+
+    @router.get("/projects/{project_id}/hub/guideline", tags=["hub"])
+    def get_guideline(project_id: str):
+        f = directory(project_id) / "guideline.md"
+        return {"text": f.read_text(encoding="utf-8") if f.is_file() else ""}
+
+    @router.put("/projects/{project_id}/hub/guideline", tags=["hub"])
+    def put_guideline(project_id: str, payload: dict = Body(...)):
+        """保存标注规范；子项目连着 Label Studio 的话，同步成 Label Studio 项目的标注说明（打开任务前弹出）"""
+        text = str(payload.get("text") or "")[:20000]
+        (directory(project_id) / "guideline.md").write_text(text, encoding="utf-8")
+        cfg = engine.store.project(project_id)["config"].get("label_studio")
+        if not cfg or not cfg.get("project_id"):
+            return {"saved": True, "label_studio": "还没连接 Label Studio，连接后再保存一次就会同步"}
+        try:
+            sync_guideline(cfg, text)
+            return {"saved": True, "label_studio": f"已同步到 Label Studio 项目 #{cfg['project_id']}"}
+        except Exception as e:
+            return {"saved": True, "label_studio": "同步到 Label Studio 失败：" + str(e)[:160]}
+
+    @router.get("/projects/{project_id}/hub/holdout", tags=["hub"])
+    def project_holdout(project_id: str):
+        """固定考试集的情况：有没有、多少张、来自哪一版数据集"""
+        from .labels import holdout_info
+        return holdout_info(directory(project_id))
+
     @router.get("/projects/{project_id}/hub/ls-status", tags=["hub"])
     def project_ls_status(project_id: str):
         """标注系统页用：本子项目的 Label Studio 进度（任务数、已标注、引擎已回收、自动回收开没开）"""

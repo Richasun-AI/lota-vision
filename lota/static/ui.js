@@ -173,5 +173,9 @@ const UI = (() => {
   const pct = (v, d = 0) => (v == null || isNaN(v) ? "—" : (v * 100).toFixed(d) + "%");
   const when = (s) => { if (!s) return "—"; const d = new Date(typeof s === "number" ? s * 1000 : s); return isNaN(d) ? String(s) : d.toLocaleString("zh-CN", { hour12: false, month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }); };
   const bytes = (n) => n == null ? "—" : n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : (n / 1024).toFixed(0) + " KB";
-  return { api, blobUrl, rawFetch, h, nav, project, projectInfo, onProject, toast, modal, runTool, lineChart, drawBoxes, pct, when, bytes, store };
+  // 关键操作点的“避坑”提示：业界做模型辅助标注 / 主动学习时最常踩的坑
+  function pitfall(items, title = "⚠️ 避坑") {
+    return h("div", { class: "callout warn pitfall" }, h("b", {}, title), h("ul", {}, ...items.map((t) => h("li", {}, t))));
+  }
+  return { api, blobUrl, rawFetch, h, nav, project, projectInfo, onProject, toast, modal, runTool, lineChart, drawBoxes, pct, when, bytes, store, pitfall };
 })();

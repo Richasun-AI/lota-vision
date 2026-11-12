@@ -383,6 +383,13 @@ def ls_setup(c, base_url="http://127.0.0.1:8081", title=None, token_env="LABEL_S
     created = client._request("POST", "/api/projects/", payload={
         "title": title or f"LOTA · {c.scenario.name}", "label_config": _pose_cfg(c) or label_config(list(c.scenario.classes), c.scenario.task)})
     pid = created["id"]
+    guide = Path(c.directory) / "guideline.md"
+    if guide.is_file() and guide.read_text(encoding="utf-8").strip():   # 子项目写过标注规范：同步成新项目的标注说明
+        try:
+            from .hub import sync_guideline
+            sync_guideline({**cfg, "project_id": pid}, guide.read_text(encoding="utf-8"))
+        except Exception:
+            pass
     raw = (Path(c.directory) / "raw").resolve()
     raw.mkdir(exist_ok=True)
     client._request("POST", "/api/storages/localfiles", payload={  # 允许 Label Studio 读引擎复制进来的原图
@@ -407,6 +414,7 @@ class Rereview(Spec):
     limit: int = Field(default=1000, ge=1, le=1000)
     preselect: bool = True    # 预先选好 Targets reviewed（有框）/ No target（没框）：看一眼直接提交，或在 Label Studio 里整批“从预测生成标注”
     replace: bool = False     # 已在当前 Label Studio 项目里、但还没人标过的任务：删掉重送（换成新的预填）；已经有人标过的不动
+    spot_check: float = Field(default=0.1, ge=0, le=1)   # “可整批确认”里随机抽这么多放进“要看”（防止不看就认可）
 
 
 def rereview_candidates(directory, task, classes):
@@ -451,7 +459,7 @@ def rereview_candidates(directory, task, classes):
     return out
 
 
-def rereview(c, which="all", selector="", confidence=0.25, device="0", limit=1000, preselect=True, replace=False):
+def rereview(c, which="all", selector="", confidence=0.25, device="0", limit=1000, preselect=True, replace=False, spot_check=0.1):
     """把要重新确认的图带着已有的框送进当前 Label Studio 项目：打开就有框，补画新类别、改错框，再选 Targets reviewed 提交。
     选了模型的话，再用它给“标注时还没有的类别”预画框。已经在当前 Label Studio 项目里的图不重复送。"""
     from .labels import _classes, _make_tasks, _project_name, _remote_tasks_by_image
@@ -519,8 +527,13 @@ def rereview(c, which="all", selector="", confidence=0.25, device="0", limit=100
         batch = "加类别前的旧标注" if cands[key][0] == "stale" else "以前没收进来的标注"
         tag = "previously_rejected" if cands[key][0] == "rejected" else "stale"
         if selector:   # 按模型结果再分：没发现新类别的可以整批确认；发现了的要人看一眼
-            batch += "·模型发现新类别（要看）" if suspect.get(key) else "·模型没发现新类别（可整批确认）"
-            tag = "look" if suspect.get(key) else "bulk_ok"
+            spot = not suspect.get(key) and int(key[:8], 16) / 0xFFFFFFFF < spot_check   # 按图片编号固定抽，重送也是同一批
+            if suspect.get(key) or spot:
+                batch += "·模型发现新类别（要看）" if suspect.get(key) else "·随机抽查（要看）"
+                tag = "look"
+            else:
+                batch += "·模型没发现新类别（可整批确认）"
+                tag = "bulk_ok"
         t["data"]["review_batch"] = tag   # 英文批次标记：Label Studio 里按它建标签页 / 筛选
         t["predictions"] = [{"model_version": f"复核·{batch}" + (f" + {selector}" if selector else ""), "result": res}]
         t["data"]["ailabel_label_schema"] = {"task": task, "classes": _classes(classes, task)}   # 这次复核按现在的全部类别
@@ -1169,6 +1182,14 @@ NODES = {
             "image_id": P("图片 ID", "图片内容的 SHA-256", "text", ""),
             "max_distance": P("最大哈希距离", "越小越严格，6 左右合适", "number", 6, min=0, max=16, step=1),
             "limit": P("最多返回几张", "", "number", 30, min=1, max=100, step=1)}},
+    "dataset.freeze_test": {
+        "title": "固定考试集",
+        "desc": "把某一版数据集的**测试集固定下来当考试集**：以后每次打包，这些图（连同同站点的图，防止泄题）都放进测试集，"
+                "其余新图只分训练 / 验证。这样 r1、r2、r3… 每一版的测试集核心不变，模型成绩才能直接比。勾“取消固定”恢复按比例随机分。",
+        "inputs": [], "outputs": [],
+        "params": {
+            "dataset_version": P("用哪一版数据集的测试集", "比如最新的 demo-r2；这一版要有测试集", "text", ""),
+            "clear": P("取消固定", "勾选 = 不再固定考试集", "toggle", False)}},
     "types.classify_by_weights": {
         "title": "按权重给照片类型归类",
         "desc": "用一个 YOLO 模型（当前子项目的模型，或一个权重文件）扫**“照片类型”页的全部照片**（全平台共用，不属于哪个子项目），"
@@ -1253,6 +1274,7 @@ NODES = {
             "limit": P("一次最多送几张", "", "number", 1000, min=1, max=1000, step=50),
             "preselect": P("预选 Targets reviewed", "勾选 = 有框的预先选好 Targets reviewed、没框的预选 No target：打开看一眼直接提交（Ctrl+Enter），"
                            "或在 Label Studio 任务列表全选 → Actions → Create Annotations From Predictions 整批确认。整批确认等于不看就认可，只对你确定没问题的批次用", "toggle", True),
+            "spot_check": P("随机抽查比例", "“可整批确认”那批里随机抽这么多放进“要看”，提醒人工抽看（预标注最常见的坑是不看就认可）。0.1 = 10%；0 = 不抽", "number", 0.1, min=0, max=1, step=0.05),
             "replace": P("替换还没人标过的任务", "勾选 = 已经送进当前 Label Studio 项目、但还没人标过的任务删掉重送（换成新的预填，比如加了预选、换了模型）；已经有人标过的不动", "toggle", False)}},
     "labels.push_prelabel": {
         "title": "送 Label Studio（带模型预框）", "desc": "用模型先把框画好，再把图片送进 Label Studio。打开图片就有框：删错框、补漏框、调边界，最后选 **Targets reviewed**（有目标）或 **No target**（没有目标）再提交。已经送过的图不会重复送。",
@@ -1397,6 +1419,20 @@ TEMPLATES = {
 TEMPLATES.update(deploy.private_json("templates.json", {}))
 
 
+# 关键节点的避坑提示（业界做模型辅助标注 / 主动学习最常踩的坑），接在节点说明后面
+NODE_PITFALLS = {
+    "curation.find_by_model": "只挑“模型拿不准”的图，数据会越来越偏：挑图策略用 mixed，或每轮掺一些随机的；每个文件夹最多 3 张左右，避免一堆几乎一样的照片。",
+    "labels.push_prelabel": "预画的框只是建议：删错框、补漏框、调边界后再选 Targets reviewed，别看到有框就提交；每张图要框全所有类别。",
+    "labels.rereview": "整批确认 = 不看就认可，只用在“可整批确认”那一批；“要看”那批（含随机抽查）一定逐张看。",
+    "dataset.publish": "没固定考试集时，每版测试集都不一样，成绩不能直接比（用“固定考试集”节点）；负样本（No target 图）保持 10% 左右。",
+    "model.train": "训练完先在同一个考试集上和旧模型比，确实更好再设为正式使用；成绩连续两三轮涨不动，就去补成绩差的类别或场景。",
+    "types.classify_by_weights": "结果只是建议：确认前先抽看几张（尤其置信度低的），确认后会成为照片类型分类器的样板。",
+}
+for _k, _tip in NODE_PITFALLS.items():
+    if _k in NODES:
+        NODES[_k]["desc"] = NODES[_k]["desc"] + " **⚠️ 避坑**：" + _tip
+
+
 # 工作流 Add Node 菜单的分组和组内顺序（按使用流程排；序号唯一）。新工具记得加进来，没列到的进“⑦ 其他工具”
 NODE_GROUPS = [
     ("① 数据导入", ["catalog.scan", "catalog.import_folder", "catalog.import_dicom", "video.frames", "catalog.extract"]),
@@ -1407,7 +1443,7 @@ NODE_GROUPS = [
                    "sorting.classify"]),
     ("④ 标注", ["labels.ls_setup", "labels.ls_guide", "labels.push", "labels.push_prelabel", "labels.rereview", "labels.pull", "labels.import",
                "labels.import_yolo", "labels.ls_video", "labels.ls_webhook", "quality.mistakes"]),
-    ("⑤ 数据集与训练", ["image.enhance", "dataset.publish", "model.train", "model.train_classic", "model.train_semseg",
+    ("⑤ 数据集与训练", ["image.enhance", "dataset.publish", "dataset.freeze_test", "model.train", "model.train_classic", "model.train_semseg",
                       "model.register", "model.evaluate", "model.alias"]),
     ("⑥ 推理、质检与部署", ["model.predict", "judge.coverage", "inspect.batch", "ocr.read", "model.export"]),
 ]
@@ -1696,3 +1732,19 @@ def _pose_cfg(c):
 # 按权重给“照片类型”归类（全平台照片，模型建议待确认）
 from .typesuggest import ClassifyTypes, classify_types  # noqa: E402
 TOOLS["types.classify_by_weights"] = Tool("按权重给照片类型归类", ClassifyTypes, classify_types)
+
+
+# 固定考试集
+class FreezeTest(Spec):
+    dataset_version: str = ""
+    clear: bool = False
+
+
+def freeze_test(c, dataset_version="", clear=False):
+    from .labels import freeze_holdout
+    if not clear and not dataset_version:
+        raise ValueError("选一版数据集，用它的测试集当考试集")
+    return freeze_holdout(c.directory, dataset_version, clear=clear)
+
+
+TOOLS["dataset.freeze_test"] = Tool("固定考试集", FreezeTest, freeze_test)

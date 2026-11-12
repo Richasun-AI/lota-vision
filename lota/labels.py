@@ -541,7 +541,8 @@ def _group_samples(samples):
 def _split_groups(samples, classes, fractions, seed, task):
     groups = _group_samples(samples)
     if len(groups) < len(fractions):
-        raise ValueError(f"Need at least {len(fractions)} independent site or duplicate groups")
+        raise ValueError(f"已复核的图太少：至少要能分成 {len(fractions)} 组互不相干的图（不同站点或不重复），才能分训练 / 验证 / 测试。"
+                         f"多标几张再打包 / Need at least {len(fractions)} independent site or duplicate groups")
     group_counts = {
         group: Counter(label for sample in rows for label in sorted(sample["categories"]))
         for group, rows in groups.items()
@@ -695,8 +696,28 @@ def publish_dataset(project_dir, version, classes, *, task="detect", val_fractio
         fractions["test"] = test_fraction
     samples, excluded = _collect_samples(project_dir, classes, task, require_site)
     if not samples:
-        raise ValueError(f"No accepted samples are ready to publish (excluded: {excluded})")
-    assignments = _split_groups(samples, classes, fractions, seed, task)
+        raise ValueError(f"没有已复核的标注可以打包（每张图要选 Targets reviewed 或 No target 才算已复核）"
+                         f" / No accepted samples are ready to publish (excluded: {excluded})")
+    hold = load_holdout(project_dir)
+    held = 0
+    if hold:
+        # 固定考试集：考试集里的图，连同同站点 / 同重复组的图（防止泄题）一律进测试集；其余的只分训练 / 验证。
+        # 这样每一版数据集的测试集核心不变，r1、r2… 的成绩才能直接比
+        groups = _group_samples(samples)
+        group_of = {sample["image_id"]: group for group, rows in groups.items() for sample in rows}
+        forced = {sample["image_id"] for rows in groups.values() if any(r["image_id"] in hold for r in rows) for sample in rows}
+        if not forced:   # 考试集里的图都不在这一版里了（比如被删了）：按平常的比例分
+            hold = set()
+    if hold:
+        rest = [sample for sample in samples if sample["image_id"] not in forced]
+        keep = 1 - test_fraction
+        fractions = {"train": (1 - val_fraction - test_fraction) / keep, "val": val_fraction / keep}
+        assignments = _split_groups(rest, classes, fractions, seed, task) if rest else {}
+        assignments.update({image_id: ("test", group_of[image_id]) for image_id in forced})
+        fractions["test"] = len(forced) / len(samples)
+        held = len(forced)
+    else:
+        assignments = _split_groups(samples, classes, fractions, seed, task)
 
     counts = dict.fromkeys(("train", "val", "test"), 0)
     class_counts = {split: dict.fromkeys(classes, 0) for split in fractions}
@@ -730,7 +751,7 @@ def publish_dataset(project_dir, version, classes, *, task="detect", val_fractio
     manifest = {
         "version": version, "dataset_id": dataset_id, "task": task, "classes": classes,
         "counts": counts, "class_counts": class_counts, "excluded": excluded, "seed": seed,
-        "fractions": fractions, "images": image_rows,
+        "fractions": fractions, "images": image_rows, "holdout": held,
         "train_path": "data.yaml" if task in ("detect", "segment", "obb", "pose") else ".",
     }
     if task == "pose":   # 关键点形状和左右翻转对应关系（数据增强左右翻转时，左手、右手要对调）
@@ -982,3 +1003,44 @@ def pull_annotations(project_dir, label_studio, classes, *, task="detect"):
     relevant = [row for row in rows if _matches_task(row, project_name, task)]
     summary = import_annotations(project_dir, relevant, classes, task=task)
     return summary | {"project_id": project_id, "skipped_remote": len(rows) - len(relevant)}
+
+
+# ── 固定考试集（holdout）：每一版数据集都用同一份测试集，模型成绩才能直接比 ─────────────────────
+def _holdout_path(project_dir):
+    return Path(project_dir) / "holdout.json"
+
+
+def load_holdout(project_dir):
+    path = _holdout_path(project_dir)
+    if not path.is_file():
+        return set()
+    return set(json.loads(path.read_text(encoding="utf-8")).get("image_ids") or [])
+
+
+def holdout_info(project_dir):
+    path = _holdout_path(project_dir)
+    if not path.is_file():
+        return {"enabled": False, "count": 0}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return {"enabled": True, "count": len(data.get("image_ids") or []), "from_dataset": data.get("from_dataset"),
+            "created": data.get("created")}
+
+
+def freeze_holdout(project_dir, dataset_version, *, clear=False):
+    """把某一版数据集的测试集固定为考试集（以后打包都放进测试集）；clear=True 取消固定"""
+    path = _holdout_path(project_dir)
+    if clear:
+        path.unlink(missing_ok=True)
+        return {"enabled": False, "count": 0}
+    manifest = Path(project_dir) / "datasets" / _version(dataset_version) / "manifest.json"
+    if not manifest.is_file():
+        raise ValueError(f"没有数据集 {dataset_version}")
+    rows = json.loads(manifest.read_text(encoding="utf-8")).get("images") or []
+    ids = sorted({row["image_id"] for row in rows if row.get("split") == "test"})
+    if not ids:
+        raise ValueError(f"数据集 {dataset_version} 没有测试集：先在项目设置里把测试比例设为 0.1，重新打包一版")
+    import time as _time
+    path.write_text(json.dumps({"image_ids": ids, "from_dataset": dataset_version,
+                                "created": _time.strftime("%Y-%m-%d %H:%M:%S")}, ensure_ascii=False, indent=1),
+                    encoding="utf-8")
+    return {"enabled": True, "count": len(ids), "from_dataset": dataset_version}
