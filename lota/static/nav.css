@@ -1,0 +1,49 @@
+/* 只含顶部导航和提示（给 /flow、/review 这类自带样式的页面用，不影响它们原来的样式） */
+:root {
+  color-scheme: light;
+  --font: "Segoe UI", "Inter", "HarmonyOS Sans SC", "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif;
+  --mono: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+  --bg: #f4f7f5;
+  --panel: #ffffff;
+  --panel-2: #f8faf9;
+  --ink: #15231e;
+  --ink-2: #33453e;
+  --muted: #64766e;
+  --line: #e0e8e3;
+  --line-2: #cdd9d2;
+  --brand-900: #0e2620;
+  --brand-800: #143a2f;
+  --brand-700: #1d6d52;
+  --brand-600: #23805f;
+  --brand-500: #2f9e78;
+  --brand-100: #e2f3eb;
+  --brand-50: #f0f9f4;
+  --info: #1d5fd1;  --info-bg: #e8f0fd;
+  --warn: #a8650d;  --warn-bg: #fdf3e2;
+  --danger: #b42318; --danger-bg: #fdecea;
+  --ok: #1d7a4f;    --ok-bg: #e3f5ea;
+  --violet: #6741d9; --violet-bg: #efeafc;
+  --r-sm: 6px; --r: 10px; --r-lg: 14px;
+  --sh-1: 0 1px 2px rgba(16, 36, 27, .06);
+  --sh-2: 0 1px 2px rgba(16, 36, 27, .05), 0 10px 28px rgba(16, 36, 27, .07);
+  --sh-3: 0 24px 64px rgba(10, 30, 22, .28);
+}
+/* 顶部导航 */
+.topnav { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 6px; height: 54px; padding: 0 18px;
+  background: var(--brand-900); color: #d6e7df; box-shadow: 0 1px 0 rgba(255,255,255,.04), var(--sh-1); }
+.topnav .brand { display: flex; align-items: center; gap: 10px; margin-right: 14px; color: #fff; font-weight: 650; letter-spacing: .01em; white-space: nowrap; }
+.topnav .brand .mark { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: linear-gradient(135deg, #2f9e78, #1d6d52); color: #fff; font-size: 15px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.18); }
+.topnav .brand small { display: block; font-weight: 400; color: #8fb3a4; font-size: 11px; margin-top: -2px; }
+.topnav a.nav { color: #c9dcd3; padding: 7px 11px; border-radius: 8px; font-size: 13.5px; white-space: nowrap; }
+.topnav a.nav:hover { background: rgba(255,255,255,.07); text-decoration: none; color: #fff; }
+.topnav a.nav.on { background: rgba(47,158,120,.22); color: #fff; box-shadow: inset 0 -2px 0 #4cc795; }
+.topnav .spacer { flex: 1; }
+.topnav select { background: #183a30; color: #eafff5; border: 1px solid #2f5a4c; border-radius: 8px; padding: 6px 10px; max-width: 230px; }
+.topnav .proj-label { font-size: 12px; color: #8fb3a4; margin-right: 4px; }
+
+.toasts { position: fixed; right: 18px; bottom: 18px; z-index: 99; display: grid; gap: 8px; }
+.toast { min-width: 240px; max-width: 420px; padding: 10px 14px; border-radius: 10px; background: var(--brand-900); color: #fff; box-shadow: var(--sh-2); font-size: 13px; animation: fade .15s; }
+.toast.err { background: #7a1d14; }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+.topnav, .topnav * { box-sizing: border-box; font-family: var(--font); }
+.topnav a.nav, .topnav a.brand { text-decoration: none; }

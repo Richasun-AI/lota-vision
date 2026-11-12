@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<script src="/static/i18n.js?v=7"></script><script src="/static/combo.js?v=1"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e2620">
+<title>拍照即检 · LOTA</title>
+<link rel="stylesheet" href="/static/ui.css?v=2">
+<script src="/static/ui.js?v=12"></script>
+<style>
+  html, body { background: var(--bg); overflow-x: hidden; }
+  .m .form { grid-template-columns: minmax(0, 1fr); } .m .input { min-width: 0; }
+  .m { max-width: 560px; margin: 0 auto; padding: 14px 14px 90px; }
+  .m-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--brand-900); color: #fff; position: sticky; top: 0; z-index: 5; }
+  .m-head .mark { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: linear-gradient(135deg,#2f9e78,#1d6d52); }
+  .m-head b { font-size: 16px; } .m-head small { display: block; color: #9cc3b3; font-size: 11px; }
+  .shot { display: grid; place-items: center; gap: 8px; height: 150px; border-radius: 18px; border: 2px dashed var(--line-2); background: #fff; color: var(--muted); font-size: 15px; cursor: pointer; }
+  .shot b { font-size: 40px; line-height: 1; }
+  .types { display: flex; flex-wrap: wrap; gap: 6px; }
+  .types label { border: 1px solid var(--line-2); border-radius: 99px; padding: 6px 12px; font-size: 13px; background: #fff; }
+  .types input { display: none; } .types label:has(input:checked) { background: var(--brand-700); color: #fff; border-color: var(--brand-700); }
+  .verdict { border-radius: 16px; padding: 16px; text-align: center; font-size: 26px; font-weight: 800; }
+  .verdict.fail { background: var(--danger-bg); color: var(--danger); } .verdict.warn { background: var(--warn-bg); color: var(--warn); }
+  .verdict.pass { background: var(--ok-bg); color: var(--ok); } .verdict.skip { background: #eef1ef; color: var(--muted); }
+  canvas { width: 100%; border-radius: 14px; background: #e7ece9; }
+  .hist { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .hist div { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: #ddd; }
+  .hist img { width: 100%; height: 100%; object-fit: cover; } .hist span { position: absolute; left: 4px; bottom: 4px; }
+</style>
+</head>
+<body>
+<div class="m-head"><span class="mark">◆</span><div><b>拍照即检</b><small>LOTA · 现场巡检 AI 即时审核</small></div></div>
+<main class="m" id="app"></main>
+<script src="/static/m.js?v=2"></script>
+</body>
+</html>

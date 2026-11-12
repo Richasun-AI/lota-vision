@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lota"
+version = "0.1.0"
+description = "LOTA (Label Once, Train Always): open-source end-to-end closed-loop vision platform"
+requires-python = ">=3.11"
+dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1", "pydantic>=2.8,<3", "Pillow>=10,<13", "PyYAML>=6,<7"]
+
+[project.optional-dependencies]
+train = ["ultralytics>=8.3,<9"]
+onnx = ["onnxruntime>=1.19,<2", "numpy>=1.26,<3"]
+curation = ["transformers>=4.49,<6", "torch>=2.2", "torchvision>=0.17", "scikit-learn>=1.5,<2", "numpy>=1.26,<3"]
+ocr = ["paddleocr>=3,<4", "paddlepaddle>=3,<4"]
+dev = ["httpx>=0.27,<1"]
+
+[project.scripts]
+lota = "lota.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["lota*"]
+
+[tool.setuptools.package-data]
+lota = ["static/*"]

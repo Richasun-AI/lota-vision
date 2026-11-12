@@ -1,0 +1,33 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+runtime/
+.smoke/
+.env
+dist/
+build/
+
+# ── 本机部署信息（不进仓库）──
+deploy.env
+README.local.md
+portal.yaml
+.sensitive-words.txt
+*.local.*
+
+# ── 内部业务资料（不进仓库）──
+legacy/
+config/
+projects/
+reports/
+research_notes/
+docs/site-inspection/
+docs/开发记录.md
+docs/*YOLO Agent*
+docs/通信巡检检查点与验收规则设计.md
+docs/标注任务与数据集规范.md
+mcp/ailabel_mcp.py
+
+# ── 私有扩展：业务专用模板、管线、提示词、标准照片类型（不进仓库）──
+private/
+lota/static/standard_categories.json

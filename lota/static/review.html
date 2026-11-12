@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<script src="/static/i18n.js?v=7"></script><script src="/static/combo.js?v=1"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LOTA · 结果复核</title>
+<link rel="stylesheet" href="/static/nav.css?v=1">
+<script src="/static/ui.js?v=12"></script>
+<style>
+  :root { --line:#e3e6eb; --muted:#6b7280; --bad:#e03131; --ok:#2f9e44; --warn:#f08c00; --accent:#e8590c; }
+  * { box-sizing:border-box; } body { margin:0; font:14px/1.5 system-ui,"Microsoft YaHei",sans-serif; background:#f6f7f9; color:#1f2329; }
+  header { position:sticky; top:0; z-index:5; background:#fff; border-bottom:1px solid var(--line); padding:8px 14px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  header h1 { font-size:16px; margin:0 8px 0 0; } select, button, input { font:inherit; padding:4px 8px; border:1px solid var(--line); border-radius:6px; background:#fff; }
+  .ctrl { display:flex; align-items:center; gap:6px; } .ctrl input[type=range] { width:150px; } .val { font-weight:700; min-width:48px; }
+  #stats { padding:8px 14px; background:#fff8f0; border-bottom:1px solid var(--line); }
+  #grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:12px; padding:12px 14px; }
+  .card { background:#fff; border:2px solid var(--line); border-radius:10px; overflow:hidden; }
+  .card.flag { border-color:var(--bad); } .card canvas { width:100%; display:block; cursor:zoom-in; background:#eee; }
+  .info { padding:6px 10px; display:flex; justify-content:space-between; align-items:center; gap:6px; font-size:13px; }
+  .cov { font-weight:700; } .cov.flag { color:var(--bad); }
+  .btns button { padding:2px 8px; font-size:12.5px; } .btns button.on.many { background:var(--bad); color:#fff; border-color:var(--bad); }
+  .btns button.on.ok { background:var(--ok); color:#fff; border-color:var(--ok); } .btns button.on.unsure { background:var(--warn); color:#fff; border-color:var(--warn); }
+  .pager { display:flex; gap:8px; align-items:center; justify-content:center; padding:10px; }
+  #big { position:fixed; inset:0; background:rgba(0,0,0,.88); display:none; align-items:center; justify-content:center; z-index:20; }
+  #big canvas { max-width:94vw; max-height:92vh; }
+  .muted { color:var(--muted); font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🔍 结果复核</h1>
+  <label>子项目 <select id="project"></select></label>
+  <label>复核单 <select id="review"></select></label>
+  <span class="ctrl">超标阈值 <input id="thr" type="range" min="0.005" max="0.3" step="0.005"><span id="thr-v" class="val"></span></span>
+  <span class="ctrl">框置信度 ≥ <input id="conf" type="range" min="0.05" max="0.95" step="0.05"><span id="conf-v" class="val"></span></span>
+  <label>显示 <select id="filter">
+    <option value="all">全部</option><option value="flag">按当前阈值：超标</option><option value="pass">按当前阈值：不超标</option>
+    <option value="undecided">还没人工确认的</option><option value="decided">已人工确认的</option><option value="disagree">阈值和人工不一致的</option>
+  </select></label>
+  <label>排序 <select id="sort"><option value="cov">覆盖率从高到低</option><option value="cov-asc">覆盖率从低到高</option></select></label>
+  <span class="muted">点图放大 · 每张选「草多 / 不多 / 不确定」，自动保存</span>
+</header>
+<div id="stats"></div>
+<div id="grid"></div>
+<div class="pager"><button id="prev">⬅️ 上一页</button><span id="page"></span><button id="next">下一页 ➡️</button></div>
+<div id="big"><canvas></canvas></div>
+<script src="/static/review.js?v=3"></script>
+<script>UI.nav("review", { picker: false });</script>
+</body>
+</html>

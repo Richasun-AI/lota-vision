@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<script src="/static/i18n.js?v=7"></script><script src="/static/combo.js?v=1"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>总览 · LOTA</title>
+<link rel="stylesheet" href="/static/ui.css?v=2">
+<script src="/static/ui.js?v=12"></script>
+<style>
+  .proj { display: grid; gap: 12px; }
+  .proj .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+  .proj .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .proj .stat { background: var(--panel-2); border-radius: 10px; padding: 8px 10px; }
+  .proj .stat b { display: block; font-size: 18px; }
+  .proj .stat span { font-size: 11.5px; color: var(--muted); }
+  .tip { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 10px; font-size: 13px; }
+  .tip.warn { background: var(--warn-bg); } .tip.info { background: var(--info-bg); } .tip.ok { background: var(--ok-bg); }
+  .flowline { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+  .flowline b { color: var(--ink); background: var(--brand-50); border: 1px solid var(--brand-100); padding: 4px 10px; border-radius: 99px; font-weight: 600; }
+</style>
+</head>
+<body>
+<main class="page" id="app"><div class="empty">加载中…</div></main>
+<script src="/static/templates.js?v=2"></script>
+<script src="/static/overview.js?v=7"></script>
+</body>
+</html>

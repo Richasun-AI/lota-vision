@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<script src="/static/i18n.js?v=7"></script><script src="/static/combo.js?v=1"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>照片类型 · LOTA</title>
+<link rel="stylesheet" href="/static/ui.css?v=2">
+<script src="/static/ui.js?v=12"></script>
+<style>
+  .types { display: grid; grid-template-columns: 300px 1fr; gap: 16px; align-items: start; }
+  .tlist { position: sticky; top: 70px; max-height: calc(100vh - 90px); overflow: auto; padding: 8px; }
+  .titem { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+  .titem:hover { background: var(--brand-50); } .titem.on { background: var(--brand-100); font-weight: 650; }
+  .titem .n { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; white-space: nowrap; }
+  .pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .pcell { position: relative; border-radius: 10px; overflow: hidden; background: #e7ece9; aspect-ratio: 4/3; border: 2px solid transparent; cursor: pointer; }
+  .pcell img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .pcell.sel { border-color: var(--brand-600); box-shadow: 0 0 0 2px rgba(47,158,120,.25); }
+  .pcell .tag { position: absolute; left: 6px; bottom: 6px; display: flex; gap: 4px; }
+  .pcell .chk { position: absolute; right: 6px; top: 6px; width: 20px; height: 20px; border-radius: 6px; background: rgba(255,255,255,.9); display: grid; place-items: center; font-size: 13px; }
+  .bar { position: sticky; top: 54px; z-index: 5; background: var(--bg); padding: 8px 0; }
+  @media (max-width: 900px) { .types { grid-template-columns: 1fr; } .tlist { position: static; max-height: 300px; } }
+</style>
+</head>
+<body>
+<main class="page" id="app"><div class="empty">加载中…</div></main>
+<script src="/static/types.js?v=7"></script>
+</body>
+</html>

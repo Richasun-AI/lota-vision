@@ -1,0 +1,15 @@
+#!/bin/bash
+# 提交前检查：按 .sensitive-words.txt（不进仓库，每行一个正则，# 开头是注释）扫描要提交的内容，命中就拒绝提交。
+# 启用：git config core.hooksPath .githooks
+list="$(git rev-parse --show-toplevel)/.sensitive-words.txt"
+[ -f "$list" ] || { echo "pre-commit：没找到 .sensitive-words.txt，跳过敏感词检查"; exit 0; }
+pat="$(grep -vE '^\s*(#|$)' "$list" | paste -sd'|' -)"
+[ -n "$pat" ] || exit 0
+hits="$(git diff --cached --name-only -z --diff-filter=ACMR | xargs -0 -r git grep --cached -nIiE "$pat" -- 2>/dev/null)"
+names="$(git diff --cached --name-only --diff-filter=ACMR | grep -iE "$pat")"
+if [ -n "$hits$names" ]; then
+  echo "✋ 提交里有敏感信息（IP、路径、内部名称），先改掉再提交："
+  [ -n "$names" ] && echo "$names" | sed 's/^/  文件名：/'
+  [ -n "$hits" ] && echo "$hits" | cut -c1-200 | sed 's/^/  /'
+  exit 1
+fi

@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<script src="/static/i18n.js?v=7"></script><script src="/static/combo.js?v=1"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LOTA · 工作流</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litegraph.js@0.7.18/css/litegraph.css">
+<script src="https://cdn.jsdelivr.net/npm/litegraph.js@0.7.18/build/litegraph.min.js"></script>
+<link rel="stylesheet" href="/static/nav.css?v=1">
+<script src="/static/ui.js?v=12"></script>
+<style>
+  :root { --bg:#f6f7f9; --panel:#fff; --line:#e3e6eb; --text:#1f2329; --muted:#6b7280; --accent:#e8590c; --ok:#2f9e44; --run:#1971c2; --bad:#e03131; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.5 system-ui,"Microsoft YaHei",sans-serif; color:var(--text); background:var(--bg); height:100vh; display:flex; flex-direction:column; }
+  header { display:flex; gap:10px; align-items:center; padding:8px 14px; background:var(--panel); border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  header h1 { font-size:16px; margin:0 12px 0 0; }
+  header select, header input, button { font:inherit; padding:5px 10px; border:1px solid var(--line); border-radius:6px; background:#fff; }
+  button { cursor:pointer; } button.primary { background:var(--accent); color:#fff; border-color:var(--accent); } button:disabled { opacity:.5; cursor:not-allowed; }
+  .tabs { display:flex; gap:4px; margin-left:auto; }
+  .tabs button.on { background:#1f2329; color:#fff; border-color:#1f2329; }
+  main { flex:1; display:flex; min-height:0; }
+  #simple { flex:1; overflow:auto; padding:18px 24px; }
+  #nodes { flex:1; position:relative; min-width:0; }
+  #nodes canvas { display:block; }
+  aside { width:340px; background:var(--panel); border-left:1px solid var(--line); overflow:auto; padding:12px 14px; }
+  aside h3 { margin:8px 0 6px; font-size:14px; } .muted { color:var(--muted); font-size:12px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:12px; max-width:860px; }
+  .field { display:grid; grid-template-columns: 210px 1fr; gap:4px 14px; align-items:start; padding:8px 0; border-top:1px dashed var(--line); }
+  .field:first-of-type { border-top:0; } .field label { font-weight:600; } .field .help { grid-column:2; color:var(--muted); font-size:12px; }
+  .field input, .field select { width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:6px; font:inherit; }
+  .steps { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }
+  .step { padding:4px 10px; border-radius:14px; background:#eef0f3; font-size:12px; }
+  .step.running { background:#d0ebff; color:var(--run); font-weight:600; } .step.done { background:#d3f9d8; color:var(--ok); } .step.failed { background:#ffe3e3; color:var(--bad); }
+  .log div { padding:4px 0; border-bottom:1px solid #f1f3f5; font-size:12.5px; }
+  .err { color:var(--bad); white-space:pre-wrap; } a { color:var(--run); }
+  .param-help dt { font-weight:600; margin-top:6px; } .param-help dd { margin:0 0 4px; color:var(--muted); font-size:12.5px; }
+  .label-pick { display:flex; flex-wrap:wrap; gap:6px 16px; } .label-pick label { font-weight:400; display:inline-flex; align-items:center; gap:4px; }
+  .label-pick input { width:auto !important; } .label-pick .help { flex-basis:100%; color:var(--muted); font-size:12px; }
+  .pick-modal { position:fixed; inset:0; background:rgba(0,0,0,.35); display:flex; align-items:center; justify-content:center; z-index:50; }
+  .pick-modal .card { min-width:320px; max-width:600px; max-height:80vh; overflow:auto; } .pick-modal button { margin-top:10px; }
+  .suggest { position:fixed; z-index:60; width:360px; max-height:420px; display:flex; flex-direction:column; background:var(--panel,#fff); border:1px solid var(--line,#ccc); border-radius:10px; box-shadow:0 8px 28px rgba(0,0,0,.25); font-size:13px; }
+  .suggest .sg-head { padding:8px 10px 4px; font-weight:600; } .suggest .sg-head .muted { font-weight:400; margin-left:4px; }
+  .suggest .sg-search { margin:4px 10px 6px; padding:5px 8px; border:1px solid var(--line,#ccc); border-radius:6px; font:inherit; }
+  .suggest .sg-list { overflow:auto; padding:0 4px 6px; } .suggest .sg-sec { padding:6px 6px 2px; color:var(--muted,#888); font-size:12px; }
+  .suggest .sg-item { padding:6px 8px; border-radius:6px; cursor:pointer; } .suggest .sg-item:hover { background:rgba(112,72,232,.12); }
+  aside { position:relative; transition:width .15s; }
+  aside .aside-head { display:flex; align-items:center; justify-content:space-between; }
+  aside .aside-head h3 { margin:8px 0 6px; }
+  .side-toggle { padding:2px 8px; font-size:12px; color:var(--muted); }
+  body.side-collapsed aside { width:34px; padding:8px 4px; overflow:hidden; cursor:pointer; }
+  body.side-collapsed aside > :not(.aside-head) { display:none; }
+  body.side-collapsed aside .aside-head { flex-direction:column; gap:8px; }
+  body.side-collapsed aside .aside-head h3 { writing-mode:vertical-rl; letter-spacing:.15em; color:var(--muted); font-weight:500; }
+  body.side-collapsed aside .side-run { display:block; width:8px; height:8px; border-radius:50%; background:var(--run); }
+  .side-run { display:none; }
+  :root:fullscreen .topnav { display:none; }
+  .suggest .sg-desc { color:var(--muted,#888); font-size:12px; margin-top:2px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🧩 工作流</h1>
+  <label>子项目 <select id="project"></select></label>
+  <label>模板 <select id="template"></select></label>
+  <button id="load-tpl">载入模板</button>
+  <label>已保存 <select id="saved"><option value="">—</option></select></label>
+  <button id="load-saved">打开</button>
+  <input id="wf-id" placeholder="工作流代码，如 demo-e2e" style="width:170px">
+  <button id="save">💾 保存</button>
+  <button id="run" class="primary">▶ 运行</button>
+  <button id="cancel" disabled>⏹ 取消</button>
+  <a href="/review" target="_blank">🔍 结果复核</a>
+  <a href="/" target="_blank">原工作台</a>
+  <button id="fullscreen" title="画布全屏（Esc 退出）">⛶ 全屏</button>
+  <div class="tabs"><button data-mode="simple" class="on">简单模式</button><button data-mode="nodes">节点模式</button></div>
+</header>
+<main>
+  <section id="simple"></section>
+  <section id="nodes" hidden><canvas id="canvas"></canvas></section>
+  <aside>
+    <div class="aside-head"><h3>运行状态</h3><span class="side-run" title="正在运行"></span><button id="side-toggle" class="side-toggle" title="收起右侧栏，给画布更多空间">收起 »</button></div>
+    <div id="status" class="muted">还没有运行</div>
+    <div id="steps" class="steps"></div>
+    <div id="log" class="log"></div>
+    <h3>节点说明</h3>
+    <div id="inspect" class="muted">在节点模式里点一个节点，这里显示它是做什么的、每个参数怎么填。右键画布可以添加节点；拖动输出圆点连到同颜色的输入；<b>从任意插口拖出连线、松开在空白处，会推荐下一个（或上一个）该接什么节点</b>。</div>
+  </aside>
+</main>
+<script src="/static/flow.js?v=18"></script>
+<script>UI.nav("flow", { picker: false });</script>
+<script>
+// 右侧“运行状态/节点说明”可收起；画布可全屏。两者都触发 resize，让节点画布重新铺满
+(() => {
+  const KEY = "flow-side-collapsed", body = document.body, tog = document.getElementById("side-toggle");
+  const relayout = () => requestAnimationFrame(() => dispatchEvent(new Event("resize")));
+  const setSide = (c) => {
+    body.classList.toggle("side-collapsed", c);
+    tog.textContent = c ? "«" : "收起 »";
+    tog.title = c ? "展开运行状态 / 节点说明" : "收起右侧栏，给画布更多空间";
+    try { localStorage.setItem(KEY, c ? "1" : ""); } catch {}
+    relayout();
+  };
+  let saved = false; try { saved = !!localStorage.getItem(KEY); } catch {}
+  setSide(saved);
+  tog.onclick = (e) => { e.stopPropagation(); setSide(!body.classList.contains("side-collapsed")); };
+  document.querySelector("aside").addEventListener("click", () => { if (body.classList.contains("side-collapsed")) setSide(false); });
+  // 收起时运行中给个小圆点提示
+  const run = document.querySelector(".side-run"), st = document.getElementById("status");
+  const dot = () => { run.style.visibility = /运行中|排队/.test(st.textContent) ? "visible" : "hidden"; };
+  dot(); new MutationObserver(dot).observe(st, { childList: true, characterData: true, subtree: true });
+  const fsBtn = document.getElementById("fullscreen");
+  fsBtn.onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen().catch(() => {});
+  document.addEventListener("fullscreenchange", () => { fsBtn.textContent = document.fullscreenElement ? "⛶ 退出全屏" : "⛶ 全屏"; relayout(); });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+<script src="/static/i18n.js?v=7"></script><script src="/static/combo.js?v=1"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>LOTA · 视觉数据工作台</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20261112-stay">
+  <script src="/static/app.js?v=20261112-stay" defer></script><script src="/static/workflow.js?v=16-migrated" defer></script><script src="/static/categories.js?v=2" defer></script>
+<script src="/static/tasks-ui.js?v=optional-sites" defer></script></head>
+<body>
+  <a class="skip" href="#content">跳转到工作区</a>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M4 8V4h4m8 0h4v4m0 8v4h-4m-8 0H4v-4M8 12l3 3 5-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <div><strong>LOTA</strong><small>视觉数据工作台</small></div>
+      </div>
+      <div class="scenario-select">
+        <div class="scenario-head"><label for="project-picker">当前场景</label><button id="new-project" class="side-add" type="button" title="新建场景">＋ 新建</button></div>
+        <select id="project-picker"><option value="">加载中</option></select>
+      </div>
+      <nav id="navigation" aria-label="导航"></nav>
+      <div class="side-foot"><button id="connection-button" class="side-connection" type="button"><span id="connection-dot" class="indicator"></span>连接设置</button><script>window.I18N && document.currentScript.parentElement.append(I18N.toggle());</script></div>
+    </aside>
+    <div class="workspace">
+      <header class="topbar">
+        <div class="breadcrumb"><span>工作区</span><span class="separator" aria-hidden="true">/</span><strong id="current-name">场景管理</strong></div>
+        <div id="project-actions" class="project-actions"></div>
+      </header>
+      <main id="content" tabindex="-1"></main>
+    </div>
+  </div>
+  <dialog id="dialog" aria-labelledby="dialog-title"></dialog>
+  <div id="notifications" role="status" aria-live="polite"></div>
+</body>
+</html>

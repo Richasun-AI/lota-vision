@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<script src="/static/i18n.js?v=7"></script><script src="/static/combo.js?v=1"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>工具箱 · LOTA</title>
+<link rel="stylesheet" href="/static/ui.css?v=2">
+<script src="/static/ui.js?v=12"></script>
+<style>
+  .compare { position: relative; width: 100%; aspect-ratio: 4/3; background: #111; border-radius: 12px; overflow: hidden; user-select: none; }
+  .compare img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  .compare .after { clip-path: inset(0 0 0 50%); }
+  .compare .bar { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.3); cursor: ew-resize; }
+  .compare .bar::after { content: "⇆"; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: #fff; color: #111; border-radius: 99px; width: 30px; height: 30px; display: grid; place-items: center; font-size: 15px; }
+  .compare .tag { position: absolute; top: 10px; padding: 3px 8px; border-radius: 6px; background: rgba(0,0,0,.55); color: #fff; font-size: 12px; }
+</style>
+</head>
+<body>
+<main class="page" id="app"><div class="empty">加载中…</div></main>
+<script src="/static/toolbox.js?v=1"></script>
+</body>
+</html>
