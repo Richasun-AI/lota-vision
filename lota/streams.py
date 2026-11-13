@@ -36,6 +36,7 @@ BRANDS = {
               "path": lambda ch, sub: f"/cam/realmonitor?channel={ch}&subtype={1 if sub else 0}"},
     "uniview": {"name": "宇视", "name_en": "Uniview", "port": 554,
                 "path": lambda ch, sub: f"/unicast/c{ch}/s{1 if sub else 0}/live"},
+    "ezviz": {"name": "海康·萤石云（不在同一网络时）", "name_en": "Hikvision EZVIZ cloud", "port": 0, "path": None},
     "url": {"name": "其他（直接填地址）", "name_en": "Other (stream URL)", "port": 0, "path": None},
 }
 
@@ -62,12 +63,22 @@ class Camera(BaseModel):
     channel: int = Field(default=1, ge=1, le=512)
     substream: bool = True                                     # 子码流：分辨率低、省带宽，监控够用；要看清细节用主码流
     url: str = Field(default="", max_length=1000)              # brand=url 时直接用这个地址
+    # brand=ezviz（海康·萤石云）：开放平台应用的 AppKey / AppSecret + 设备序列号；通道号、码流沿用上面的
+    ez_app_key: str = Field(default="", max_length=64)
+    ez_app_secret: str = Field(default="", max_length=128)
+    ez_serial: str = Field(default="", max_length=32)
+    ez_code: str = Field(default="", max_length=32)            # 设备验证码：填了会自动关闭视频加密
+    ez_protocol: str = Field(default="flv", pattern="^(flv|hls|rtmp)$")
     location: str = Field(default="", max_length=120)
     ai: AiConfig = Field(default_factory=AiConfig)
 
 
 def build_url(cam: Camera) -> str:
-    """拼出取流地址（含账号密码，只在服务器内部用）"""
+    """拼出取流地址（含账号密码，只在服务器内部用）。萤石云返回给网页看的占位地址；真正取流用 resolve_url"""
+    if cam.brand == "ezviz":
+        from . import ezviz
+        ezviz.check(cam)
+        return ezviz.display(cam)
     if cam.brand == "url":
         u = urlsplit(cam.url.strip())
         if u.scheme.lower() not in SCHEMES or not u.hostname:
@@ -81,6 +92,14 @@ def build_url(cam: Camera) -> str:
     b = BRANDS[cam.brand]
     auth = (quote(cam.username, safe="") + ":" + quote(cam.password, safe="") + "@") if cam.username else ""
     return f"rtsp://{auth}{cam.host}:{cam.port or b['port']}{b['path'](cam.channel, cam.substream)}"
+
+
+def resolve_url(cam: Camera, fresh=False) -> str:
+    """真正用来取流的地址：萤石云要联网换临时直播地址，其他品牌和 build_url 一样"""
+    if cam.brand == "ezviz":
+        from . import ezviz
+        return ezviz.live_url(cam, force=fresh)
+    return build_url(cam)
 
 
 def redact(url: str) -> str:
@@ -98,6 +117,8 @@ def redact(url: str) -> str:
 def public(cam: Camera) -> dict:
     d = cam.model_dump()
     d["password"] = MASK if cam.password else ""
+    d["ez_app_secret"] = MASK if cam.ez_app_secret else ""
+    d["ez_code"] = MASK if cam.ez_code else ""
     try:
         d["stream_url"] = redact(build_url(cam))
     except ValueError as e:
@@ -199,13 +220,20 @@ class Live:
 
     def _read(self):
         import cv2
-        backoff = 2
+        backoff, fresh = 2, False
         while not self.stop.is_set():
             try:
-                url = build_url(self.cam)
-            except ValueError as e:
+                url = resolve_url(self.cam, fresh)   # 萤石云：重连时换一个新的直播地址
+            except (ValueError, ConnectionError) as e:
                 self.status, self.error = "error", str(e)
-                return
+                if self.cam.brand != "ezviz":       # 本地摄像头：配置错了，重试也没用
+                    return
+                self.error += f"，{backoff} 秒后重试"   # 萤石云：设备离线、网络抖动等，过一会儿再试
+                if self.stop.wait(backoff):
+                    break
+                backoff = min(backoff * 2, 60)
+                continue
+            fresh = True
             self.status = "connecting"
             cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
             if not cap.isOpened():
@@ -337,6 +365,9 @@ class Manager:
             cam = cam.model_copy(update={"password": old.password})
         if old and cam.brand == "url" and MASK in cam.url and old.url:
             cam = cam.model_copy(update={"url": old.url})
+        for k in ("ez_app_secret", "ez_code"):
+            if old and getattr(cam, k) == MASK:
+                cam = cam.model_copy(update={k: getattr(old, k)})
         return cam
 
     def save(self, cam: Camera, create=False):
@@ -556,9 +587,9 @@ def register_routes(router, engine, directory, app):
     def test_camera(cam: Camera):
         """试连：取一帧回来（不保存配置）；密码填 ****** 时用已保存的"""
         cam = mgr.merge_secret(cam, mgr.cameras().get(cam.id))
-        url = build_url(cam)
-        frame, ms = probe(url)
-        return {"ok": True, "ms": ms, "width": int(frame.shape[1]), "height": int(frame.shape[0]), "stream_url": redact(url),
+        shown = redact(build_url(cam))
+        frame, ms = probe(resolve_url(cam, fresh=True), timeout=30 if cam.brand == "ezviz" else 12)   # 云端首帧慢
+        return {"ok": True, "ms": ms, "width": int(frame.shape[1]), "height": int(frame.shape[0]), "stream_url": shown,
                 "snapshot": "data:image/jpeg;base64," + base64.b64encode(_jpeg(frame, 800, 80)).decode()}
 
     @router.get("/streams/{cid}/status", tags=["streams"])

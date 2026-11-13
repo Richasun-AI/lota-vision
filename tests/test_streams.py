@@ -54,5 +54,69 @@ class StreamUrlTests(unittest.TestCase):
             cam(id="../x")
 
 
+class EzvizTests(unittest.TestCase):
+    def setUp(self):
+        from lota import ezviz
+        self.ez = ezviz
+        ezviz._tokens.clear(); ezviz._urls.clear(); ezviz._decrypted.clear()
+        self.calls = []
+        self.replies = {}
+        def fake(path, data, timeout=10):
+            self.calls.append((path, dict(data)))
+            r = self.replies.get(path)
+            if isinstance(r, list):
+                r = r.pop(0)
+            if isinstance(r, Exception):
+                raise r
+            return r
+        self._orig, ezviz._post = ezviz._post, fake
+
+    def tearDown(self):
+        self.ez._post = self._orig
+
+    def ezcam(self, **kw):
+        return cam(brand="ezviz", host="", ez_app_key="k", ez_app_secret="s3cret", ez_serial="j12345678", **kw)
+
+    def test_display_url_and_masking(self):
+        c = self.ezcam(ez_code="ABCDEF")
+        self.assertEqual(build_url(c), "ezviz://J12345678/1?sub&flv")
+        d = public(c)
+        self.assertEqual((d["ez_app_secret"], d["ez_code"]), (MASK, MASK))
+        self.assertNotIn("s3cret", str(d))
+
+    def test_missing_fields_rejected_without_network(self):
+        with self.assertRaises(ValueError):
+            build_url(cam(brand="ezviz", host="", ez_app_key="k", ez_app_secret="", ez_serial="J12345678"))
+        with self.assertRaises(ValueError):
+            build_url(cam(brand="ezviz", host="", ez_app_key="k", ez_app_secret="s", ez_serial="bad serial"))
+        self.assertEqual(self.calls, [])
+
+    def test_live_url_cached_and_token_refresh(self):
+        from lota.streams import resolve_url
+        self.replies = {"/api/lapp/token/get": [{"accessToken": "at.1", "expireTime": (__import__("time").time() + 7 * 86400) * 1000},
+                                                {"accessToken": "at.2", "expireTime": (__import__("time").time() + 7 * 86400) * 1000}],
+                        "/api/lapp/v2/live/address/get": [self.ez.EzvizError("10002", "expired"), {"url": "https://x/live.flv"}]}
+        c = self.ezcam(substream=False, channel=2)
+        self.assertEqual(resolve_url(c), "https://x/live.flv")
+        addr = [d for p, d in self.calls if p.endswith("address/get")]
+        self.assertEqual(addr[-1]["accessToken"], "at.2")
+        self.assertEqual((addr[-1]["deviceSerial"], addr[-1]["channelNo"], addr[-1]["quality"], addr[-1]["protocol"]), ("J12345678", 2, 1, 4))
+        n = len(self.calls)
+        self.assertEqual(resolve_url(c), "https://x/live.flv")   # 缓存，不再联网
+        self.assertEqual(len(self.calls), n)
+
+    def test_code_turns_off_encryption_once(self):
+        import time
+        self.replies = {"/api/lapp/token/get": {"accessToken": "at", "expireTime": (time.time() + 86400 * 7) * 1000},
+                        "/api/lapp/device/encrypt/off": self.ez.EzvizError("60016", "already off"),
+                        "/api/lapp/v2/live/address/get": {"url": "https://x/a.flv"}}
+        c = self.ezcam(ez_code="ABCDEF")
+        self.ez.live_url(c); self.ez.live_url(c, force=True)
+        self.assertEqual(sum(p.endswith("encrypt/off") for p, _ in self.calls), 1)
+
+    def test_error_message_is_chinese(self):
+        self.assertIn("不在线", str(self.ez.EzvizError("20007", "x")))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -118,6 +118,7 @@ function inp(v, attrs = {}) { return h("input", { class: "input", value: v ?? ""
 async function editCamera(c) {
   const isNew = !c;
   c = c || { id: "", name: "", brand: "hikvision", host: "", port: 554, username: "admin", password: "", channel: 1, substream: true, url: "", location: "",
+    ez_app_key: "", ez_app_secret: "", ez_serial: "", ez_code: "", ez_protocol: "flv",
     ai: { enabled: false, project: UI.project(), pipelines: [], model: "production", conf: 0.25, every_sec: 1, cooldown_sec: 60, photo_type: "" } };
   const f = {
     name: inp(c.name, { placeholder: "如：仓库大门" }),
@@ -129,6 +130,13 @@ async function editCamera(c) {
     substream: h("select", { class: "select" }, h("option", { value: "1", selected: c.substream }, "子码流（省带宽，推荐）"), h("option", { value: "0", selected: !c.substream }, "主码流（高清）")),
     url: inp(c.url, { placeholder: "rtsp://192.168.1.10:554/stream1 · rtmp://… · http://…/video.mjpg" }),
     location: inp(c.location, { placeholder: "可不填，如：A 区 3 号楼" }),
+    ezKey: inp(c.ez_app_key, { autocomplete: "off", placeholder: "open.ys7.com → 我的应用" }),
+    ezSecret: inp(c.ez_app_secret, { type: "password", autocomplete: "new-password", placeholder: isNew ? "" : "不改就留着 ******" }),
+    ezSerial: inp(c.ez_serial, { placeholder: "如：J12345678（机身标签上）" }),
+    ezCode: inp(c.ez_code, { type: "password", autocomplete: "new-password", placeholder: "可不填；6 位大写字母" }),
+    ezChannel: inp(c.channel, { type: "number", min: 1, max: 512 }),
+    ezSub: h("select", { class: "select" }, h("option", { value: "1", selected: c.substream }, "流畅（省流量，推荐）"), h("option", { value: "0", selected: !c.substream }, "高清")),
+    ezProto: h("select", { class: "select" }, ...[["flv", "FLV（延迟低，推荐）"], ["hls", "HLS（兼容好，延迟高）"], ["rtmp", "RTMP"]].map(([v, t]) => h("option", { value: v, selected: v === (c.ez_protocol || "flv") }, t))),
     aiOn: h("input", { type: "checkbox", checked: c.ai.enabled }),
     project: h("select", { class: "select" }, h("option", { value: "" }, "— 选子项目 —"), ...PROJECTS.map((p) => h("option", { value: p.id, selected: p.id === c.ai.project }, p.name ? `${p.name}（${p.id}）` : p.id))),
     pipes: h("div", { class: "row" }),
@@ -144,11 +152,17 @@ async function editCamera(c) {
     h("div", { class: "three" }, field("用户名", f.username), field("密码", f.password), field("码流", f.substream)));
   const urlBox = field("取流地址", f.url, "支持 rtsp:// rtsps:// rtmp:// http(s):// srt://；账号密码可以写在地址里，也可以填在下面两格");
   const urlAuth = h("div", { class: "two" }, field("用户名（可不填）", f.username.cloneNode()), field("密码（可不填）", f.password.cloneNode()));
+  const ezBox = h("div", { class: "form" },
+    h("div", { class: "help" }, "摄像头和服务器不在同一个网络时用：服务器经萤石云拉画面（延迟 2–10 秒，占萤石账号的流量额度）。先用“萤石云视频”App 把设备添加到萤石开放平台（open.ys7.com）对应的账号，再到“我的应用”里拿 AppKey 和 AppSecret。"),
+    h("div", { class: "two" }, field("AppKey", f.ezKey), field("AppSecret", f.ezSecret)),
+    h("div", { class: "three" }, field("设备序列号", f.ezSerial, "机身标签或 App 设备信息里"), field("通道号", f.ezChannel, "摄像头填 1；录像机填第几路"), field("清晰度", f.ezSub)),
+    h("div", { class: "two" }, field("取流协议", f.ezProto), field("设备验证码", f.ezCode, "画面加密时才需要：填了会自动关闭这台设备的“视频加密”（否则拉到的画面解不出来）；也可以在 App 里自己关")));
   const swap = () => {
-    const isUrl = f.brand.value === "url";
-    deviceBox.style.display = isUrl ? "none" : "";
+    const kind = f.brand.value, isUrl = kind === "url", isEz = kind === "ezviz";
+    deviceBox.style.display = isUrl || isEz ? "none" : "";
     urlBox.style.display = urlAuth.style.display = isUrl ? "" : "none";
-    if (!isUrl && !f.port.value) f.port.value = BRANDS[f.brand.value].port;
+    ezBox.style.display = isEz ? "" : "none";
+    if (!isUrl && !isEz && !f.port.value) f.port.value = BRANDS[kind].port;
   };
   f.brand.onchange = swap;
   const [uUser, uPass] = urlAuth.querySelectorAll("input");
@@ -165,11 +179,14 @@ async function editCamera(c) {
   };
   f.project.onchange = loadPipes;
   const collect = () => {
-    const isUrl = f.brand.value === "url";
+    const isUrl = f.brand.value === "url", isEz = f.brand.value === "ezviz";
     const chosen = [...f.pipes.querySelectorAll("input:checked")].map((x) => x.value), all = f.pipes.querySelectorAll("input").length;
     return {
       id: f.id.value.trim().toLowerCase(), name: f.name.value.trim() || f.id.value.trim(), brand: f.brand.value,
-      host: f.host.value.trim(), port: Number(f.port.value) || 0, channel: Number(f.channel.value) || 1, substream: f.substream.value === "1",
+      host: f.host.value.trim(), port: Number(f.port.value) || 0,
+      channel: Number((isEz ? f.ezChannel : f.channel).value) || 1, substream: (isEz ? f.ezSub : f.substream).value === "1",
+      ez_app_key: f.ezKey.value.trim(), ez_app_secret: f.ezSecret.value.trim(), ez_serial: f.ezSerial.value.trim().toUpperCase(),
+      ez_code: f.ezCode.value.trim(), ez_protocol: f.ezProto.value,
       username: (isUrl ? uUser.value : f.username.value).trim(), password: isUrl ? uPass.value : f.password.value,
       url: f.url.value.trim(), location: f.location.value.trim(),
       ai: { enabled: f.aiOn.checked, project: f.project.value, pipelines: chosen.length === all ? [] : chosen, model: f.model.value.trim() || "production",
@@ -178,7 +195,7 @@ async function editCamera(c) {
   };
   const test = h("button", { class: "btn" }, "🔌 测试连接");
   test.onclick = async () => {
-    test.disabled = true; preview.replaceChildren("连接中…（最多 12 秒）");
+    test.disabled = true; preview.replaceChildren(f.brand.value === "ezviz" ? "经萤石云连接中…（最多 30 秒）" : "连接中…（最多 12 秒）");
     try {
       const body = collect(); if (!body.id) body.id = "test";
       const r = await UI.api("/api/streams/test", { method: "POST", body });
@@ -189,8 +206,8 @@ async function editCamera(c) {
   };
   const body = h("div", { class: "form" },
     h("div", { class: "two" }, field("名称", f.name), field("编号", f.id, isNew ? "创建后不能改，报警截图按它归档" : "编号不能改")),
-    h("div", { class: "two" }, field("品牌 / 接入方式", f.brand, "海康、大华、宇视会按规则自动拼地址"), field("位置", f.location)),
-    deviceBox, urlBox, urlAuth,
+    h("div", { class: "two" }, field("品牌 / 接入方式", f.brand, "海康、大华、宇视按规则自动拼地址（服务器要能连到摄像头）；不在同一个网络的海康摄像头选“萤石云”"), field("位置", f.location)),
+    deviceBox, urlBox, urlAuth, ezBox,
     h("div", { class: "row" }, test), preview,
     h("div", { class: "section-title" }, "AI 检测与报警"),
     h("label", { class: "row" }, f.aiOn, h("b", {}, "开启 AI 检测"), h("span", { class: "small muted" }, "开启后服务器一直连着这路摄像头，不看画面也会检测、报警")),

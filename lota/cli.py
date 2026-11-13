@@ -44,8 +44,9 @@ def main(argv=None):
         token = os.environ.get("LOTA_API_TOKEN")
         if args.host not in ("127.0.0.1", "::1", "localhost") and not token:
             raise SystemExit("LOTA_API_TOKEN is required for a non-loopback listener")
+        # 停止时最多等 5 秒：网页上开着的实时画面（MJPEG 长连接）不会自己结束，不设上限会一直卡在关闭中，重启起不来
         uvicorn.run(create_app(args.home, args.source_root, args.weights_root, token),
-                    host=args.host, port=args.port)
+                    host=args.host, port=args.port, timeout_graceful_shutdown=5)
         return
     engine = Engine(args.home, args.source_root, args.weights_root)
     if args.command == "seed":
