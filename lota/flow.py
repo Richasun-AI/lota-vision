@@ -244,18 +244,25 @@ def pick_type(c, photo_type, only_confirmed=False, limit=100, seed=42):
             (confirmed if is_human else predicted).add(key)
     predicted -= confirmed
     _ensure_category(c, photo_type, hf.TAXONOMY[photo_type])
+    from .learning import human_labels
+    mine = human_labels(c.directory)
+    # 本子项目里已经人工确认成别的类别的（比如先归了杂草，照片类型页又说是接地），保留原来的，不覆盖；结果里列出来让人看
+    conflicts = sorted(k for k in confirmed | predicted if mine.get(k) not in (None, photo_type))
+    confirmed -= set(conflicts)
     if confirmed:
         from .learning import confirm
         confirm(c, sorted(confirmed), photo_type)
     if predicted:
-        from .learning import human_labels
         from .sorting import store_results
-        mine = human_labels(c.directory)   # 本子项目里已经人工确认过的，不覆盖
         store_results(c.directory, [{"image_id": k, "category": photo_type, "review": "pending", "provenance": "photo_types",
                                      "candidates": [{"label": photo_type, "source": "照片类型页模型预测"}]}
                                     for k in sorted(predicted) if k not in mine])
     out.update({"photo_type": photo_type, "pool_left": len(pool) - len(chosen), "picked_before": len(picked),
-                "confirmed": len(confirmed), "predicted": len(predicted)})
+                "confirmed": len(confirmed), "predicted": len(predicted),
+                "kept_existing": len(conflicts), "kept_existing_ids": conflicts[:50]})
+    if conflicts:
+        out["note"] = (f"{len(conflicts)} 张在本子项目里已经确认成别的类别，保留原来的类别没改（一张照片只能有一个类别）。"
+                       "要改的话，在原图与分拣里选中后用“确认所选图片类别”")
     return out
 
 
@@ -559,6 +566,166 @@ def _review_views(client, project_id, batches):
                     "conjunction": "and", "items": [{"filter": "filter:tasks:data.review_batch", "operator": "equal", "type": "String", "value": tag}]}}})
     except Exception:
         pass
+
+
+# ── 收不进来的标注：清单（给“标注系统”页显示和管理）+ 斜框一键转正 ─────────────────────
+REASON_ZH = {   # 引擎内部原因 → (中文原因, 怎么改)；kind 用于网页分组和决定能不能一键转正
+    "Rotated annotations need review before axis-aligned YOLO export":
+        ("rotated", "框是斜的（旋转过）", "正框模型收不了斜框：在 Label Studio 把框的 Rotation 改成 0 或重画一个水平框；也可以在这里点“斜框转正”。"),
+    "Rectangle class is unknown or ambiguous":
+        ("class", "框的类别名对不上", "Label Studio 里框的类别不在本子项目的类别里：改成现有类别，或先在本页“添加类别”。"),
+    "Confirm all target classes have been reviewed":
+        ("coverage", "画了框但没选 Targets reviewed", "打开任务，确认框都画全了，选 Targets reviewed 再提交。"),
+    "No boxes and no explicit negative label":
+        ("coverage", "没画框也没选 No target", "图里有目标就画框并选 Targets reviewed；没有目标就选 No target。"),
+    "Boxes contradict the explicit No target choice":
+        ("coverage", "画了框却选了 No target", "有目标就改选 Targets reviewed；没有目标就删掉框。"),
+    "Completed annotations disagree":
+        ("conflict", "几份标注不一致", "同一张图有多人标注且结果不同：删掉错的那份，或把对的那份设为 Ground Truth。"),
+    "Export contains conflicting tasks for this image":
+        ("conflict", "同一张图有多个任务且标得不一样", "删掉重复的任务，只留一份。"),
+    "Rectangle lies outside the image or has no area":
+        ("geometry", "框超出图片或面积为 0", "把框拖回图片内，或删掉这个框。"),
+    "Rectangle image dimensions do not match the managed image":
+        ("geometry", "标注时的图片尺寸和原图对不上", "图片可能被换过：重新送这张图标注。"),
+    "Rectangle is below YOLO export precision":
+        ("geometry", "框太小了", "删掉这个框，或画大一点。"),
+    "Annotator marked evidence as uncertain":
+        ("unsure", "标注员选了 Unsure（拿不准）", "请有经验的人看一下再定。"),
+}
+
+
+def _straight(value, W, H):
+    """Label Studio 斜框（左上角 x,y + 宽高 + 绕左上角顺时针转的角度，单位 %）→ 刚好包住它的水平框（%）"""
+    import math
+    x, y = float(value["x"]) / 100 * W, float(value["y"]) / 100 * H
+    w, h = float(value["width"]) / 100 * W, float(value["height"]) / 100 * H
+    t = math.radians(float(value.get("rotation", 0)))
+    c, s = math.cos(t), math.sin(t)
+    xs = [x, x + w * c, x + w * c - h * s, x - h * s]
+    ys = [y, y + w * s, y + w * s + h * c, y + h * c]
+    l, r = max(0.0, min(xs)), min(float(W), max(xs))
+    tp, b = max(0.0, min(ys)), min(float(H), max(ys))
+    return {**value, "x": l / W * 100, "y": tp / H * 100, "width": (r - l) / W * 100, "height": (b - tp) / H * 100, "rotation": 0}
+
+
+def _rot(v):
+    r = float((v or {}).get("rotation") or 0) % 360
+    return r - 360 if r > 180 else r
+
+
+def review_items(directory, task, classes, public_url=""):
+    """收不进来 / 要重新确认的标注清单：每张图的原因（中文）、怎么改、框（含角度）、Label Studio 任务链接"""
+    import sqlite3
+    from contextlib import closing
+    db = Path(directory) / "annotations" / "index.sqlite3"
+    if not db.is_file():
+        return []
+    stale = {k for k, v in rereview_candidates(directory, task, classes).items() if v[0] == "stale"}
+    with closing(sqlite3.connect(db, timeout=10)) as conn:
+        rows = conn.execute("SELECT r.image_id, r.status, r.reason, r.original FROM current_annotations c JOIN revisions r "
+                            "ON r.task=c.task AND r.image_id=c.image_id AND r.revision=c.revision WHERE c.task=?", (task,)).fetchall()
+    out = []
+    for image_id, status, reason, original in rows:
+        if status == "accepted" and image_id not in stale:
+            continue
+        if status == "unlabeled" and reason == "No completed annotation":
+            continue   # 还没人标，不算问题
+        try:
+            entries = json.loads(original)
+        except (TypeError, ValueError):
+            entries = []
+        entries = [e for e in (entries if isinstance(entries, list) else [entries]) if isinstance(e, dict)]
+        boxes, links = [], []
+        for e in entries:
+            if e.get("id") and e.get("project"):
+                links.append({"task": e["id"], "project": e["project"],
+                              "url": f"{public_url.rstrip('/')}/projects/{e['project']}/data?task={e['id']}" if public_url else ""})
+            anns = [a for a in (e.get("annotations") or []) if isinstance(a, dict) and isinstance(a.get("result"), list)
+                    and not a.get("was_cancelled") and not a.get("skipped")]
+            for item in (anns[-1]["result"] if anns else []):
+                v = item.get("value") if isinstance(item, dict) else None
+                if isinstance(v, dict) and item.get("type") == "rectanglelabels" and all(k in v for k in ("x", "y", "width", "height")):
+                    boxes.append({"x": v["x"], "y": v["y"], "width": v["width"], "height": v["height"], "rotation": _rot(v),
+                                  "label": (v.get("rectanglelabels") or ["?"])[0]})
+        if status == "accepted":
+            kind, zh, fix = "stale", "加新类别前标的，没检查过新类别", "用“送回 Label Studio 复核”送回去，补画新类别后选 Targets reviewed 提交。"
+        else:
+            kind, zh, fix = REASON_ZH.get(reason, ("other", reason or status, "打开 Label Studio 任务看一下，改好后重新提交。"))
+        out.append({"image_id": image_id, "status": status, "kind": kind, "reason": zh, "fix": fix, "raw_reason": reason,
+                    "boxes": boxes, "max_rotation": max((abs(b["rotation"]) for b in boxes), default=0), "links": links})
+    order = {"rotated": 0, "class": 1, "coverage": 2, "conflict": 3, "geometry": 4, "unsure": 5, "other": 6, "stale": 7}
+    return sorted(out, key=lambda r: (order.get(r["kind"], 9), r["image_id"]))
+
+
+class Straighten(Selection):
+    max_angle: float = Field(default=45, ge=0, le=90)   # 超过这个角度的斜框不自动转（转出来背景太多），留给人重画
+
+
+def straighten(c, image_ids, max_angle=45):
+    """把 Label Studio 里这些图的斜框改成刚好包住它的水平框（直接改 Label Studio 里的标注，留得住），然后重新回收。"""
+    import sqlite3
+    from contextlib import closing
+    from .labels import _raw_image, pull_annotations
+    from .store import Scenario
+    cfg = c.engine.store.project(Path(c.directory).name)["config"]
+    ls = cfg.get("label_studio")
+    if not ls:
+        raise ValueError("还没连接 Label Studio")
+    if c.scenario.task != "detect":
+        raise ValueError("斜框转正只用于检测（正框）任务；旋转框任务（obb）本来就收斜框")
+    client = _ls_client(ls)
+    db = Path(c.directory) / "annotations" / "index.sqlite3"
+    with closing(sqlite3.connect(db, timeout=10)) as conn:
+        rows = conn.execute("SELECT r.image_id, r.original FROM current_annotations c JOIN revisions r ON r.task=c.task AND "
+                            "r.image_id=c.image_id AND r.revision=c.revision WHERE c.task=? AND r.status='invalid' AND r.reason=?",
+                            (c.scenario.task, "Rotated annotations need review before axis-aligned YOLO export")).fetchall()
+    rows = {k: v for k, v in rows if k in set(image_ids)}
+    fixed, boxes, too_steep, failed = [], 0, [], []
+    for image_id, original in rows.items():
+        row, _ = _raw_image(c.directory, image_id)
+        W, H = row.get("width"), row.get("height")
+        entries = json.loads(original)
+        entries = entries if isinstance(entries, list) else [entries]
+        changes = []
+        for e in entries:
+            anns = [a for a in (e.get("annotations") or []) if isinstance(a, dict) and isinstance(a.get("result"), list)
+                    and not a.get("was_cancelled") and not a.get("skipped")]
+            for a in anns:
+                result, n = [], 0
+                for item in a["result"]:
+                    v = item.get("value") if isinstance(item, dict) else None
+                    if isinstance(v, dict) and item.get("type") == "rectanglelabels" and _rot(v):
+                        w0, h0 = item.get("original_width") or W, item.get("original_height") or H
+                        if not (w0 and h0):
+                            raise ValueError(f"{image_id[:12]}：不知道图片尺寸，没法转正")
+                        if abs(_rot(v)) > max_angle:
+                            too_steep.append(image_id)
+                            result = None
+                            break
+                        item = {**item, "value": _straight(v, w0, h0)}
+                        n += 1
+                    result.append(item)
+                if result is not None and n:
+                    changes.append((a["id"], result, n))
+        if image_id in too_steep:
+            continue
+        try:
+            for ann_id, result, n in changes:
+                client._request("PATCH", f"/api/annotations/{ann_id}", payload={"result": result})
+                boxes += n
+            if changes:
+                fixed.append(image_id)
+        except Exception as e:
+            failed.append({"image_id": image_id, "error": str(e)[:200]})
+    scenario = c.scenario if c.scenario.label_studio else Scenario.model_validate(cfg)
+    pulled = pull_annotations(c.directory, ls, scenario.classes, task=scenario.task) if fixed else None
+    return {"fixed": len(fixed), "boxes": boxes, "too_steep": sorted(set(too_steep)), "failed": failed,
+            "not_rotated": sorted(set(image_ids) - set(rows)), "image_ids": fixed,
+            "pulled": (pulled or {}).get("counts")}
+
+
+TOOLS["labels.straighten"] = Tool("斜框转正（改成水平框并重新回收）", Straighten, straighten)
 
 
 class PushPrelabel(Selection):

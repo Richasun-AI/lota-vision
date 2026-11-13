@@ -192,3 +192,9 @@ dialog.viewer .dialog-body { padding: .6rem .9rem; }
 .pitfall { margin: 10px 0; }
 .pitfall ul { margin: 6px 0 0; padding-left: 20px; }
 .pitfall li { margin: 3px 0; line-height: 1.55; }
+.fix-media { position: relative; width: 100%; min-height: 8rem; background: #e5eee8; display: grid; place-items: center; }
+.fix-media img { display: block; width: 100%; height: auto; }
+.fix-media > span { padding: .5rem; }
+.fix-box { position: absolute; border: 2px solid #2b8d68; transform-origin: 0 0; pointer-events: auto; }
+.fix-box.rotated { border-color: #d9480f; }
+.fix-box i { position: absolute; left: 0; top: -1.15rem; font-style: normal; font-size: .68rem; color: #fff; background: inherit; background-color: rgba(0,0,0,.6); padding: 0 .25rem; border-radius: 3px; white-space: nowrap; }

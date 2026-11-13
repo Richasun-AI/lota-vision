@@ -89,10 +89,10 @@ def create_app(home, source_roots=(), weights_roots=(), token=None):
 
     @router.get("/projects/{project_id}/images", tags=["catalog"])
     def images(project_id: str, status: str | None = None, checkpoint: str | None = None,
-               site_id: str | None = None, extracted: bool | None = None,
+               site_id: str | None = None, extracted: bool | None = None, category: str | None = None,
                limit: int = Query(100, ge=1, le=200), offset: int = Query(0, ge=0)):
         return catalog.list_images(directory(project_id), status=status, checkpoint=checkpoint,
-                                   site_id=site_id, extracted=extracted, limit=limit, offset=offset)
+                                   site_id=site_id, extracted=extracted, limit=limit, offset=offset, category=category)
 
     @router.get("/projects/{project_id}/images/{image_id}/preview", tags=["catalog"])
     def preview(project_id: str, image_id: str, size: int = Query(360, ge=120, le=1800)):

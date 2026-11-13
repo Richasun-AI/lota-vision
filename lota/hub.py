@@ -492,6 +492,15 @@ def register_overview(router, engine, directory):
                   "rejected": sum(1 for v in cands.values() if v[0] == "rejected")}
         return {"connected": bool(ls), **(ls or {}), "classes": conf.get("classes"), "needs_review": review}
 
+    @router.get("/projects/{project_id}/hub/review-items", tags=["hub"])
+    def project_review_items(project_id: str):
+        """收不进来 / 要重新确认的标注：每张图的原因、怎么改、框、Label Studio 任务链接"""
+        from .flow import review_items
+        d = directory(project_id)
+        conf = engine.store.project(project_id)["config"]
+        public = load_settings(d)["label_studio"].get("public_url") or ""
+        return review_items(d, conf.get("task", "detect"), conf.get("classes") or [], public)
+
     @router.get("/overview", tags=["hub"])
     def overview():
         from .agent import load_pipelines, recent_inspections

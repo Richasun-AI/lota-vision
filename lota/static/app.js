@@ -191,8 +191,10 @@ function openDialog(title, content, wide = false) {
     h("header", {class: "dialog-head"}, h("h2", {id: "dialog-title"}, title), button("关闭", () => dialog.close(), "small")),
     h("div", {class: "dialog-body"}, content),
   );
-  if (!dialog.open) dialog.showModal();
+  if (!dialog.open) { dialog._scrollY = window.scrollY; dialog.showModal(); }
 }
+// 对话框关掉时浏览器会把焦点还给打开它的按钮（常在页面顶部），页面跟着跳上去；这里恢复原来的滚动位置
+dialog.addEventListener("close", () => { const y = dialog._scrollY; if (y != null) requestAnimationFrame(() => window.scrollTo(0, y)); });
 
 function formContent(children, title, submit) {
   const errorBox = h("p", {class: "form-error", role: "alert"});
@@ -294,10 +296,11 @@ async function refresh(tab = state.tab) {
   if (!state.project || state.tab !== tab) return;
   const pages = {gallery: galleryPage, labels: labelsPage, datasets: datasetsPage,
     models: modelsPage, workflows: workflowsPage, jobs: jobsPage};
-  const generation = ++state.generation, y = window.scrollY;
+  const generation = ++state.generation;
   let content;
   try { content = await pages[tab](); } catch (error) { notifyUser("刷新失败：" + error.message); return; }
   if (generation !== state.generation) return;
+  const y = window.scrollY;   // 换内容前一刻的位置（对话框关闭后的滚动已经恢复）
   const loaded = new Map();
   for (const old of root.querySelectorAll(".photo-media[data-started]")) if (old.querySelector("img")) loaded.set(old.dataset.path, old);
   for (const media of content.querySelectorAll?.(".photo-media") || []) {
@@ -601,6 +604,7 @@ async function galleryPage() {
   if (state.status && state.status !== "all") query.set("status", state.status);
   else if (!state.status) query.set("status", "active");
   if (state.checkpoint) query.set("checkpoint", state.checkpoint);
+  if (state.category) query.set("category", state.category);   // 类别 + 状态 / 检查点一起筛（以前这时会忽略类别）
   const sortQuery=new URLSearchParams({limit:String(perPage),offset:String(state.offset)});
   if(state.category)sortQuery.set("category",state.category);
   if(!state.status)sortQuery.set("exclude_rejected","true");
@@ -611,7 +615,7 @@ async function galleryPage() {
   // 当前筛选范围一共多少张（按检查点筛选时算不出总数，只能逐页翻）
   let total=null;
   if(usingSorting)total=state.category?(sorting.categories[state.category]||0):Object.values(sorting.categories).reduce((a,b)=>a+b,0);
-  else if(!state.checkpoint)total=state.status==="all"?stats.total:!state.status?stats.total-((stats.review||{}).rejected||0):state.status==="extracted"?stats.extracted:(stats.review||{})[state.status]??null;
+  else if(!state.checkpoint&&!state.category)total=state.status==="all"?stats.total:!state.status?stats.total-((stats.review||{}).rejected||0):state.status==="extracted"?stats.extracted:(stats.review||{})[state.status]??null;
   state.galleryRange={usingSorting,category:state.category||"",status:state.status||"",checkpoint:state.checkpoint||"",total};
   if (project !== state.project) return document.createDocumentFragment();
   state.images = images;
@@ -1047,6 +1051,48 @@ async function trackJob(project, job, title, onDone) {
     }
   }
 }
+// 收不进来的标注：按原因分组列出来，看图（带框，斜框按角度画）、看怎么改、一键打开 Label Studio 任务；斜框可一键转正
+async function reviewItemsPanel(project,runAndRefresh){
+  const items=await request(pathFor(project)+"/hub/review-items").catch(()=>[]);
+  if(!items.length)return "";
+  const kinds={rotated:"框是斜的",class:"类别名对不上",coverage:"没选确认选项",conflict:"标注不一致",geometry:"框的位置/大小有问题",unsure:"拿不准",stale:"加类别前的旧标注",other:"其他"};
+  const counts={};for(const it of items)counts[it.kind]=(counts[it.kind]||0)+1;
+  const picked=new Set();let filter=Object.keys(counts)[0];
+  const grid=h("div",{class:"gallery"}),bar=h("div",{class:"actions"}),tabs=h("div",{class:"actions"});
+  const media=(it)=>{
+    const box=h("div",{class:"fix-media"},h("span",{class:"small muted"},"加载中…"));
+    request(previewPath(project,it),"GET",undefined,"blob").then((blob)=>{
+      const url=URL.createObjectURL(blob),img=h("img",{alt:it.image_id.slice(0,12)});
+      img.addEventListener("load",()=>URL.revokeObjectURL(url),{once:true});img.src=url;
+      box.replaceChildren(img,...it.boxes.map((b)=>h("div",{class:"fix-box"+(b.rotation?" rotated":""),title:b.label+(b.rotation?" · 斜 "+b.rotation.toFixed(1)+"°":""),
+        style:`left:${b.x}%;top:${b.y}%;width:${b.width}%;height:${b.height}%;transform:rotate(${b.rotation}deg)`},h("i",{},b.label))));
+    }).catch(()=>box.replaceChildren(h("span",{},"预览不可用")));
+    return box;
+  };
+  const draw=()=>{
+    tabs.replaceChildren(...Object.entries(counts).map(([k,n])=>button(kinds[k]+" "+n,()=>{filter=k;picked.clear();draw();},k===filter?"small primary":"small")));
+    const shown=items.filter((it)=>it.kind===filter);
+    grid.replaceChildren(...shown.map((it)=>{
+      const check=h("input",{type:"checkbox",checked:picked.has(it.image_id),onchange:(e)=>{e.target.checked?picked.add(it.image_id):picked.delete(it.image_id);draw();}});
+      return h("article",{class:"photo"+(picked.has(it.image_id)?" is-selected":"")},media(it),
+        h("div",{class:"photo-body"},h("strong",{class:"photo-name",title:it.image_id},it.image_id.slice(0,12)),
+          h("div",{class:"actions"},pill(it.reason,it.kind==="stale"?"":"warn"),it.max_rotation?pill("斜 "+it.max_rotation.toFixed(1)+"°",it.max_rotation>20?"bad":"warn"):""),
+          h("p",{class:"small muted"},it.fix),
+          h("div",{class:"rail"},h("label",{class:"photo-select"},check,"选取"),
+            ...it.links.filter((l)=>l.url).map((l)=>h("a",{href:l.url,target:"_blank",rel:"noopener",class:"small"},"LS #"+l.task+" ↗")))));
+    }));
+    const ids=[...picked],all=shown.map((it)=>it.image_id),use=ids.length?ids:all,label=ids.length?"所选 "+ids.length+" 张":"这一组 "+all.length+" 张";
+    bar.replaceChildren(
+      button(picked.size===shown.length?"取消全选":"全选这一组",()=>{if(picked.size===shown.length)picked.clear();else all.forEach((i)=>picked.add(i));draw();},"small"),
+      filter==="rotated"?button("斜框转正（"+label+"）",runAndRefresh("labels.straighten",{image_ids:use},"斜框转正"),"primary"):"",
+      filter==="stale"||filter==="class"||filter==="coverage"?button("送回 Label Studio 复核",()=>toolDialog("labels.rereview"),filter==="stale"?"primary":""):"");
+  };
+  draw();
+  return panel(h("strong",{},"收不进来的标注："+items.length+" 张"),
+    h("p",{class:"small muted"},"在 Label Studio 提交了、但引擎没收进来（或要重新确认）的图。点上面的分组看每一类；“LS #…” 直接打开那个任务，改好提交后点“立即回收标注”，改好的会从这里消失。"),
+    filter==="rotated"||counts.rotated?h("p",{class:"small muted"},"斜框转正：把斜框改成刚好包住它的水平框（直接改 Label Studio 里的标注，然后自动回收）。角度大于 45° 的不自动转，请在 Label Studio 里重画。"):"",
+    tabs,bar,grid);
+}
 async function labelsPage(){
   const project=state.project;
   const [ls,annotations]=await Promise.all([request(pathFor(project)+"/hub/ls-status").catch(e=>({connected:false,error:e.message})),request(pathFor(project)+"/annotations")]);
@@ -1069,12 +1115,7 @@ async function labelsPage(){
     h("p",{class:"small muted"},"点下面的按钮，按现在的类别新建一个 Label Studio 项目并切换过去（自动开启自动回收）；旧项目留在 Label Studio 里不动，里面已画的框可以用“送回复核”带到新项目。"),
     h("div",{class:"actions"},button("按现在的类别新建 Label Studio 项目",runAndRefresh("labels.ls_setup",{new:true},"新建 Label Studio 项目",
       async()=>{await request(pathFor(project)+"/tools/labels.ls_webhook","POST",{enabled:true,engine_url:"http://127.0.0.1:8795"});await initialize(project.id);}),"primary"))):"";
-  const nr=ls.needs_review||{},nrTotal=(nr.stale||0)+(nr.rejected||0);
-  const reviewPanel=nrTotal?panel(h("strong",{},"需要复核："+nrTotal+" 张"),
-    nr.stale?h("p",{},"加新类别前已通过的旧标注 "+nr.stale+" 张：没检查过新类别，暂时不能进数据集。"):"",
-    nr.rejected?h("p",{},"以前回收没通过、但已经画了框的 "+nr.rejected+" 张（类别名对不上、没选 Targets reviewed 等）。"):"",
-    h("p",{class:"small muted"},"“送回复核”会把这些图带着已有的框送进当前 Label Studio 项目，打开就有框：补画新类别、改错框，选 Targets reviewed 提交即可。有了新类别的模型后，可以选它给旧图预画新类别的框，补查更快。"),
-    h("div",{class:"actions"},button("送回 Label Studio 复核",()=>toolDialog("labels.rereview"),"primary"))):"";
+  const reviewPanel=await reviewItemsPanel(project,runAndRefresh);
   let status;
   if(!ls.connected)status=panel(h("strong",{},"Label Studio"),h("p",{},"这个子项目还没连接 Label Studio。点“提交所选图片”时会提示一键连接。"));
   else if(ls.error)status=panel(h("strong",{},"Label Studio 项目 #"+ls.project_id),h("p",{class:"error"},"连不上 Label Studio："+ls.error));

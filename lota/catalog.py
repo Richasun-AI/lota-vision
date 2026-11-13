@@ -566,7 +566,7 @@ def _image_dict(project_dir: Path, db, row) -> dict:
 def list_images(
     project_dir: Path, *, status: str | None = None, checkpoint: str | None = None,
     site_id: str | None = None, extracted: bool | None = None,
-    limit: int = 100, offset: int = 0,
+    limit: int = 100, offset: int = 0, category: str | None = None,
 ) -> list[dict]:
     if not 1 <= limit <= 1000 or offset < 0:
         raise ValueError("limit must be 1–1000 and offset must be non-negative")
@@ -600,8 +600,16 @@ def list_images(
         params.append(site_id)
     if extracted is not None:
         filters.append("raw_relpath IS NOT NULL" if extracted else "raw_relpath IS NULL")
+    sorting_db = project_dir / "catalog" / "sorting.sqlite3"
+    if category:   # 按分拣类别筛（和状态、检查点一起用）
+        if not sorting_db.exists():
+            return []
+        filters.append("image_id IN (SELECT image_id FROM srt.results WHERE category=?)")
+        params.append(category)
     where = " WHERE " + " AND ".join(filters) if filters else ""
     with _database(project_dir) as db:
+        if category:
+            db.execute("ATTACH DATABASE ? AS srt", (str(sorting_db),))
         return [
             _image_dict(project_dir, db, row) for row in db.execute(
                 f"SELECT * FROM images{where} ORDER BY created_ns DESC, image_id LIMIT ? OFFSET ?",
