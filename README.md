@@ -1,6 +1,6 @@
 # LOTA — Label Once, Train Always
 
-> LOTA: Label Once, Train Always.**
+> **LOTA: Label Once, Train Always.**
 > 开源的端到端视觉 AI 平台：标注一次，模型自己越练越好。
 
 **数据 → 标注 → 训练 → 模型 → 推理 / 质检** 的一体化视觉 AI 平台。第一个落地场景是通信巡检照片的 **AI 自动审核**，已在菲律宾落地使用；平台按“子项目 = 一个识别场景”组织，可扩展到工业检测、医学影像、机器人、自动驾驶、遥感等商业场景。
@@ -9,11 +9,26 @@
 - 标注：Label Studio `http://<服务器>:8081`（引擎自动建项目、送任务、带模型预框、回收标注）
 - 接口：`/docs`（OpenAPI），Agent 接口 `/api/agent/*`，MCP 服务器 `mcp/lota_mcp.py`
 
+## 运行截图
+
+**总览**：所有子项目的进度、系统状态（显存、磁盘）和每个项目的下一步建议
+
+![总览](docs/screenshots/01-overview.png)
+
+**使用指南**：按“我想做什么”组织的操作步骤，每一步都能直接点进对应页面
+
+![使用指南](docs/screenshots/02-guide.png)
+
 ## 页面地图
+
+顶部导航按使用顺序分组：开始 | 图像准备 | 数据 | 训练与应用 | 系统。
 
 | 页面       | 地址          | 做什么                                                                                                                    |
 | ---------- | ------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | 总览       | `/overview`   | 所有子项目的进度、Label Studio 协同进度、模型成绩、质检统计；**下一步建议**；「新建子项目」向导（6 个行业 16 个场景模板） |
+| 使用指南   | `/guide`      | 按“我想做什么”组织的步骤 + 常见问题                                                                                       |
+| 初选       | `/prefilter`  | 原图目录逐张打画质分（分辨率 / 清晰度 / 曝光 / 对比度）、去重；按档看图、人工改判；入选的**硬链接**到精选目录（原图不动）；“不要”的进回收站，可恢复或永久删除；原图补充后增量更新 |
+| 照片类型   | `/types`      | 按**图库**管理图像数据集（一个目录一个图库，切换后互不可见）：SigLIP2 特征 + 人工样板，自动把海量照片归类；找相似图；拿不准的进临时仓库；图库可合并 |
 | 工作台     | `/`           | 原图与分拣（大图查看器：原图、滚轮缩放、排除/删除、批量复核）、类别、任务记录                                             |
 | 工作流     | `/flow`       | 节点式编辑器 + 简单模式；12 个工作流模板；拖线推荐下一个节点；断点续跑                                                    |
 | 数据集     | `/datasets`   | 版本、划分、类别分布、带框样例；一键回收并打包；**找标注错误**（FiftyOne mistakenness 思路）                              |
@@ -23,12 +38,12 @@
 | 实时监控   | `/streams`    | 接海康 / 大华 / 宇视 / 任意 RTSP 摄像头：网页实时看画面；按子项目的模型和质检规则抽帧检测，命中就报警截图；截图一键导入图库做训练数据 |
 | 结果复核   | `/review`     | 覆盖率判定的人工复核单（阈值 vs 人工一致率）                                                                              |
 | 项目设置   | `/settings`   | 专业参数统一管理：训练默认值、轮数档位、数据划分、命名规范、数据增强（5 个预设）、找图、导出、Label Studio                |
-| 使用指南   | `/guide`      | 按“我想做什么”组织的步骤 + 常见问题                                                                                       |
 | 开发者 API | `/developers` | 鉴权、Agent 接口、流式质检、MCP 配置、全部工具（实时）                                                                    |
 
 ## 能力一览
 
 - **任务类型**：目标检测、实例分割（多边形）、旋转框 OBB、图像分类；模型：YOLO26 / YOLOv8（n/s/m 底座已下载）+ **非 YOLO** 经典分类网络（torchvision：ResNet、EfficientNet、ConvNeXt、MobileNet、ViT）
+- **图像准备**：初选（画质打分 + 去重 + 人工改判，硬链接导出精选目录，回收站两步删除）；照片类型图库（SigLIP2 特征、逻辑回归 + 交叉验证、零样本兜底、临时仓库、相似图、图库合并）；原图持续补充时全程增量（只扫新增、只导出新的、只算新图特征）
 - **数据**：文件夹导入、按照片类型抽图、**用权重找图**（断点续扫；挑图策略 confident / uncertain / mixed + 每文件夹上限 + 感知哈希去重）、视频抽帧、**DICOM 医学影像**（窗宽窗位，去隐私）、图像增强副本
 - **标注协同**：Label Studio 自动建项目（检测框 / 多边形 / 可旋转框 / 分类 / 视频跟踪）、带模型预框送任务、**webhook 自动回收**、ML 后端按项目自动用引擎最新模型
 - **主动学习**：回收 → 打包 → 接着上一轮训练 → 用新模型挑最值得标的新图 → 带预框送标注（模板「主动学习一轮」）
@@ -40,6 +55,7 @@
 
 ## 快速开始
 
+0. （原图很多、质量参差时）初选 → 选原图目录扫描 → 看图改判 → 导出到精选目录 →「去照片类型建图库」，确认一些样板后「重新训练并归类全部」
 1. 总览 →「＋ 新建子项目」→ 选行业模板 → 创建
 2. 工作流 → 选模板（如「空开·开始」）→ 运行：抽图、连 Label Studio、开启自动回收、送标注
 3. 在 Label Studio 标注（每张选 Targets reviewed / No target）
@@ -73,7 +89,7 @@ python scripts/stream_inspect.py --project demo --watch <下载目录> --only-fa
 | 部署配置    | `deploy.env`：数据目录、允许读的原图 / 权重目录、Label Studio 地址，模板见 `deploy.env.example`                                                                               |
 | 机密        | `.env`：`LOTA_API_TOKEN`（网页和接口的访问口令）、`LABEL_STUDIO_TOKEN`                                                                                                        |
 | Python 环境 | `.venv/`                                                                                                                                                                      |
-| 引擎数据    | `runtime/`（`LOTA_HOME`）：`projects/<子项目>/`（catalog、annotations、datasets、models、runs、reviews、qa、inspections、settings.json、pipelines.json）、`weights/` 底座权重 |
+| 引擎数据    | `runtime/`（`LOTA_HOME`）：`projects/<子项目>/`（catalog、annotations、datasets、models、runs、reviews、qa、inspections、settings.json、pipelines.json）、`weights/` 底座权重；`imagelibs.json` + `imagelibs/<图库>/` 照片类型图库；`prefilter/` 初选任务、回收站、硬链接登记 |
 
 ```bash
 python -m venv .venv && .venv/bin/pip install -e app        # 装依赖
@@ -98,14 +114,17 @@ lota/
   media.py       图像增强、视频抽帧、LS 视频标注、DICOM 导入
   streams.py     实时监控：摄像头接入、MJPEG 播放、AI 抽帧检测与报警
   cleanup.py     移除类别、批量复核、删除照片
+  prefilter.py   初选：画质打分、去重、人工改判、硬链接导出、回收站
+  imagelib.py    图库：类型清单、SigLIP2 索引、样板、训练归类、删除 / 恢复、图库合并
+  phototypes.py typesuggest.py  照片类型页接口、用子项目模型给类型建议
   backends_tv.py 非 YOLO 分类网络（torchvision）
   static/        页面：ui.css/ui.js（设计规范与共享组件）+ 各页面
 mcp/lota_mcp.py        MCP 服务器（零依赖）
 scripts/stream_inspect.py 流式质检客户端；engine.sh 服务器启停
-docs/                    使用说明与设计文档
+docs/                    使用说明与设计文档；docs/screenshots/ 运行截图
 ```
 
 ## 路线
 
-- 已完成：合并工程；首个场景端到端；节点式工作流；产品化页面（总览、模型中心、数据集、质检、工具箱、设置、指南、开发者）；分割 / OBB / 非 YOLO / DICOM / 视频；主动学习；Agent + MCP
-- 下一步：姿态关键点（pose）任务；把 ⑤ 类型归类（SigLIP 相似图、种子确认）完整移植进工作台；大图切片（遥感 / PCB）；按类别的评估明细；多用户与权限
+- 已完成：合并工程；首个场景端到端；节点式工作流；产品化页面（总览、模型中心、数据集、质检、工具箱、设置、指南、开发者）；分割 / OBB / 非 YOLO / DICOM / 视频；主动学习；Agent + MCP；实时监控；初选与照片类型图库（SigLIP2 相似图、样板确认、图库合并、增量处理）
+- 下一步：姿态关键点（pose）任务；大图切片（遥感 / PCB）；按类别的评估明细；多用户与权限
