@@ -26,6 +26,12 @@
  "\"subject_clarity\": 主体设备是否清晰可辨，1=完全看不清 2=很差 3=一般 4=清楚 5=非常清楚,": [
   "vlmcheck.py"
  ],
+ "# 图库": [
+  "imagelib.py"
+ ],
+ "# 图库“{0}”网页上新增的照片类型": [
+  "imagelib.py"
+ ],
  "# 方式一": [
   "developers.js"
  ],
@@ -95,11 +101,17 @@
  "**默认只预演**": [
   "flow.py"
  ],
+ "+ 它自己的照片类型": [
+  "types.js"
+ ],
  "+切片": [
   "agent.py"
  ],
  "// .mcp.json（Claude Code 项目根目录）或 Claude Desktop 配置": [
   "developers.js"
+ ],
+ "/精选/": [
+  "prefilter.js"
  ],
  "0 = GPU；cpu 会非常慢": [
   "flow.py"
@@ -125,6 +137,12 @@
  ],
  "0 = 到结尾": [
   "flow.py"
+ ],
+ "0 = 只去完全相同的": [
+  "prefilter.js"
+ ],
+ "0 = 只去完全相同的；8 常用；越大去得越狠": [
+  "prefilter.js"
  ],
  "0 = 左边": [
   "datasets.js"
@@ -188,7 +206,11 @@
  ],
  "0.5 稳妥": [
   "datasets.js",
-  "flow.py"
+  "flow.py",
+  "types.js"
+ ],
+ "0.5 稳妥；调低建议多，误判也多": [
+  "types.js"
  ],
  "0.5 适合正式判定": [
   "app.js"
@@ -360,6 +382,9 @@
  "512 常用；细节多用 768": [
   "flow.py"
  ],
+ "6 位大写字母": [
+  "streams.js"
+ ],
  "6 左右合适": [
   "flow.py"
  ],
@@ -392,6 +417,9 @@
   "app.js",
   "flow.py"
  ],
+ "8 常用": [
+  "prefilter.js"
+ ],
  "80% 以上很好": [
   "models.js"
  ],
@@ -406,6 +434,9 @@
  ],
  "960 · 小目标": [
   "models.js"
+ ],
+ "< {0} 分": [
+  "prefilter.js"
  ],
  "<View><Header value=\"在关键帧画框，Label Studio 会自动插值中间帧；目标消失时关掉该轨迹\"/><Video name=\"video\" value=\"$video\" framerate=\"25\"/><VideoRectangle name=\"box\" toName=\"video\"/><Labels name=\"videoLabels\" toName=\"video\" allowEmpty=\"true\">": [
   "media.py"
@@ -506,6 +537,9 @@
  "A 区 3 号楼": [
   "streams.js"
  ],
+ "A 按分数": [
+  "prefilter.js"
+ ],
  "A/B 对比": [
   "models.js"
  ],
@@ -537,6 +571,21 @@
  ],
  "Agent 接口": [
   "developers.js"
+ ],
+ "App 把设备添加到萤石开放平台": [
+  "streams.js"
+ ],
+ "AppKey 不存在": [
+  "ezviz.py"
+ ],
+ "AppKey 不存在：检查萤石开放平台“我的应用”里的 AppKey": [
+  "ezviz.py"
+ ],
+ "AppKey 和 AppSecret 对不上": [
+  "ezviz.py"
+ ],
+ "AppKey 被冻结": [
+  "ezviz.py"
  ],
  "App界面": [
   "vlmcheck.py"
@@ -582,6 +631,9 @@
  ],
  "Ctrl+Enter 提交": [
   "guide.js"
+ ],
+ "D 不要": [
+  "prefilter.js"
  ],
  "DICOM 文件夹": [
   "flow.py"
@@ -634,8 +686,14 @@
  "FCN-ResNet50（非 YOLO 语义分割）": [
   "models.js"
  ],
+ "FLV（延迟低，推荐）": [
+  "streams.js"
+ ],
  "HF 缓存": [
   "learning.py"
+ ],
+ "HLS（兼容好，延迟高）": [
+  "streams.js"
  ],
  "IP / 域名": [
   "streams.js"
@@ -669,6 +727,7 @@
   "types.js"
  ],
  "LOTA 照片类型页": [
+  "imagelib.py",
   "phototypes.py"
  ],
  "LOTA 照片类型页删除": [
@@ -738,6 +797,12 @@
  ],
  "Label Studio 里有 {0} 张已标注、还没回收": [
   "hub.py"
+ ],
+ "Label Studio 里框的类别不在本子项目的类别里": [
+  "flow.py"
+ ],
+ "Label Studio 里框的类别不在本子项目的类别里：改成现有类别，或先在本页“添加类别”。": [
+  "flow.py"
  ],
  "Label Studio 里没有预框": [
   "guide.js"
@@ -916,6 +981,9 @@
  "accepted 已确认 / rejected 已排除 / pending 待复核": [
   "flow.py"
  ],
+ "accessToken 过期或无效": [
+  "ezviz.py"
+ ],
  "all = 全部": [
   "flow.py"
  ],
@@ -986,6 +1054,12 @@
  "cuda = 显卡，cpu = 处理器": [
   "flow.py"
  ],
+ "decision 只能是 keep": [
+  "prefilter.py"
+ ],
+ "decision 只能是 keep / drop / clear": [
+  "prefilter.py"
+ ],
  "deeplabv3_mobilenet_v3_large 均衡": [
   "flow.py"
  ],
@@ -1030,6 +1104,12 @@
  ],
  "inspect 推送的照片": [
   "inspect.js"
+ ],
+ "latest = 最新训练的": [
+  "types.js"
+ ],
+ "latest = 最新训练的；production = 正式使用的": [
+  "types.js"
  ],
  "lota_mcp.py 配进 Claude Code 的 .mcp.json": [
   "guide.js"
@@ -1115,6 +1195,9 @@
  "op 只能是 {1}": [
   "agent.py"
  ],
+ "open.ys7.com → 我的应用": [
+  "streams.js"
+ ],
  "path 或 url 其中之一": [
   "agent.py"
  ],
@@ -1132,6 +1215,9 @@
  ],
  "production = 当前正式模型": [
   "flow.py"
+ ],
+ "production = 正式使用的": [
+  "types.js"
  ],
  "production = 正式使用的模型": [
   "flow.py"
@@ -1286,12 +1372,13 @@
  ],
  "{0} {1} 张": [
   "datasets.js",
+  "prefilter.js",
   "types.js"
  ],
  "{0} {1} 张 → {2}": [
   "flow.js"
  ],
- "{0} {1} 张{2}{3}": [
+ "{0} {1} 张{2}{3}{4}": [
   "types.js"
  ],
  "{0} · {1} · {2} 个类别": [
@@ -1343,13 +1430,17 @@
   "types.js"
  ],
  "{0} 张": [
-  "flow.js"
+  "flow.js",
+  "types.js"
  ],
  "{0} 张 · {1} 个框": [
   "datasets.js"
  ],
- "{0} 张 · 占用 {1} · 删除的照片先放在这里（数据目录下的 _deleted），可以恢复到原来的位置": [
+ "{0} 张 · 占用 {1} · 本图库删除的照片先放在这里（{2}），可以恢复到原来的位置": [
   "types.js"
+ ],
+ "{0} 张 · 扫描于 {1}": [
+  "prefilter.js"
  ],
  "{0} 张图": [
   "models.js"
@@ -1362,6 +1453,12 @@
  ],
  "{0} 张图片 · {1} 个类别 · {2} 个标注": [
   "models.js"
+ ],
+ "{0} 张在本子项目里已经确认成别的类别": [
+  "flow.py"
+ ],
+ "{0} 张在本子项目里已经确认成别的类别，保留原来的类别没改（一张照片只能有一个类别）。要改的话，在原图与分拣里选中后用“确认所选图片类别”": [
+  "flow.py"
  ],
  "{0} 张已分去向": [
   "flow.js"
@@ -1433,14 +1530,27 @@
  "{0} 里的类别编号 {1} 超出子项目类别 {2}": [
   "flow.py"
  ],
+ "{0}/{1}  ·  {2} {3} 分  ·  {4}×{5}  ·  清晰度 {6}  ·  亮度 {7}  ·  对比度 {8}": [
+  "prefilter.js"
+ ],
  "{0}/{1} GB · 占用 {2}% · {3}℃": [
   "overview.js"
  ],
  "{0}/{1} 已标，已回收 {2}": [
   "overview.js"
  ],
+ "{0}/{1} 张 · {2} 张/秒": [
+  "imagelib.py",
+  "prefilter.py"
+ ],
  "{0}/{1} 张，{2} 框": [
   "flow.js"
+ ],
+ "{0}–{1} 分": [
+  "prefilter.js"
+ ],
+ "{0}–{1} 分：{2} 张": [
+  "prefilter.js"
  ],
  "{0}（torchvision 语义分割）": [
   "backends_tv.py"
@@ -1460,6 +1570,9 @@
  "{0}（可多选）": [
   "flow.js"
  ],
+ "{0}（这一层有 {1} 张图片）": [
+  "prefilter.js"
+ ],
  "{0}（预训练）": [
   "backends_tv.py"
  ],
@@ -1471,6 +1584,9 @@
  ],
  "{0}：{1}（浏览器播放不了这个格式，显示的是服务器抽出来的帧）": [
   "models.js"
+ ],
+ "{0}：不知道图片尺寸，没法转正": [
+  "flow.py"
  ],
  "{1} 个框": [
   "datasets.js",
@@ -1499,6 +1615,9 @@
  ],
  "{1} 综合 {2}": [
   "models.js"
+ ],
+ "{1}×{2} · 清晰度 {3} · 亮度 {4} · 对比度 {5}": [
+  "prefilter.js"
  ],
  "{1}模型": [
   "flow.js"
@@ -1537,6 +1656,18 @@
  "{size} 模型大小": [
   "settings.js"
  ],
+ "·  ✓ 导出": [
+  "prefilter.js"
+ ],
+ "·  不导出": [
+  "prefilter.js"
+ ],
+ "·  人工：{0}": [
+  "prefilter.js"
+ ],
+ "·  和": [
+  "prefilter.js"
+ ],
  "· <a href=\"/review?project={0}&id={1}\" target=\"_blank\">打开复核单</a>": [
   "flow.js"
  ],
@@ -1549,10 +1680,16 @@
  "· 准确率 {0}%": [
   "flow.js"
  ],
+ "· 斜": [
+  "app.js"
+ ],
  "· 本类准确率 {0}": [
   "types.js"
  ],
  "· 样板 {0} 张": [
+  "types.js"
+ ],
+ "· 沿用旧流水线数据": [
   "types.js"
  ],
  "· 点开看每类": [
@@ -1591,6 +1728,12 @@
  "“{0}”没有可抽的新图片（已抽过 {1} 张）": [
   "flow.py"
  ],
+ "“中”档分数线": [
+  "prefilter.js"
+ ],
+ "“中”档分数线不能高于“高”档": [
+  "prefilter.py"
+ ],
  "“其他/无关”是临时仓库，不能作为归类目标": [
   "typesuggest.py"
  ],
@@ -1606,8 +1749,8 @@
  "“用权重找图”“主动学习一轮”的默认挑图方式": [
   "settings.js"
  ],
- "“送回复核”会把这些图带着已有的框送进当前 Label Studio 项目，打开就有框：补画新类别、改错框，选 Targets reviewed 提交即可。有了新类别的模型后，可以选它给旧图预画新类别的框，补查更快。": [
-  "app.js"
+ "“高”档分数线": [
+  "prefilter.js"
  ],
  "”不合规：用小写英文、数字、下划线": [
   "overview.js"
@@ -1646,13 +1789,17 @@
   "models.js"
  ],
  "‹ 上一张": [
-  "app.js"
+  "app.js",
+  "prefilter.js"
  ],
  "← 全部工单": [
   "report.js"
  ],
  "← 回到本类照片": [
   "types.js"
+ ],
+ "→ 去照片类型建图库": [
+  "prefilter.js"
  ],
  "→“原图与分拣”→「从照片类型抽图」，把“照片类型”页确认过的某类照片复制进来，类别一起带过来；以前抽的旧图用「按照片类型补类别」补上。": [
   "guide.js"
@@ -1668,6 +1815,27 @@
  ],
  "↩ 恢复所选": [
   "types.js"
+ ],
+ "↺ 按分数": [
+  "prefilter.js"
+ ],
+ "↻ 扫描": [
+  "prefilter.js"
+ ],
+ "↻ 扫描（增量）": [
+  "prefilter.js"
+ ],
+ "↻ 更新索引": [
+  "types.js"
+ ],
+ "≥ {0} 分": [
+  "prefilter.js"
+ ],
+ "≥ 这个分算中": [
+  "prefilter.js"
+ ],
+ "≥ 这个分算高": [
+  "prefilter.js"
  ],
  "⏳ {0} 个任务在跑": [
   "overview.js"
@@ -1717,12 +1885,6 @@
  "⑤类型归类的结果": [
   "flow.py"
  ],
- "⑤类型归类里没有": [
-  "flow.py"
- ],
- "⑤类型归类里没有“{0}”类型的照片": [
-  "flow.py"
- ],
  "⑥ 推理": [
   "flow.py"
  ],
@@ -1733,6 +1895,7 @@
   "flow.py"
  ],
  "■ 停止": [
+  "prefilter.js",
   "streams.js"
  ],
  "▶ 看画面": [
@@ -1799,6 +1962,9 @@
  "✅ 连上了：{0}×{1}，用时 {2} 毫秒": [
   "streams.js"
  ],
+ "✓ 导出": [
+  "prefilter.js"
+ ],
  "✓ 已确认": [
   "types.js"
  ],
@@ -1810,6 +1976,15 @@
  ],
  "✓ 确认为本类": [
   "types.js"
+ ],
+ "✓ 要": [
+  "prefilter.js"
+ ],
+ "✕ 不要": [
+  "prefilter.js"
+ ],
+ "✕ 关闭": [
+  "prefilter.js"
  ],
  "✕ 忽略所选建议": [
   "types.js"
@@ -1823,8 +1998,17 @@
  "➕ 给模型加新类别": [
   "guide.js"
  ],
+ "⟳ 增量更新": [
+  "prefilter.js"
+ ],
+ "⟳ 增量更新（扫描 + 导出）": [
+  "prefilter.js"
+ ],
  "⬅️ 上一页": [
   "review.html"
+ ],
+ "⬆ 上一级": [
+  "prefilter.js"
  ],
  "。训练至少要 2 个类别、每类最好 ≥5 张且来自不同站点。": [
   "app.js"
@@ -1871,6 +2055,12 @@
  "一个人标注也能越标越快：模型帮你找图、画预框。": [
   "guide.js"
  ],
+ "一个图库管理一个图片目录": [
+  "types.js"
+ ],
+ "一个图库管理一个图片目录（含子目录）：自己的照片类型、样板、归类结果、回收站。切到别的图库后，这里的照片和类型都看不到。建好后会自动“更新索引”（给每张图算特征，显卡上约每分钟几千张）。": [
+  "types.js"
+ ],
  "一个子项目 = 一个模型": [
   "guide.js"
  ],
@@ -1904,8 +2094,14 @@
  "一句中文一句英文": [
   "agent.py"
  ],
+ "一定不导出": [
+  "prefilter.js"
+ ],
  "一定先把旧标注": [
   "app.js"
+ ],
+ "一定导出": [
+  "prefilter.js"
  ],
  "一定逐张看": [
   "app.js",
@@ -1916,7 +2112,8 @@
   "flow.py"
  ],
  "一张图中了多条规则": [
-  "flow.py"
+  "flow.py",
+  "types.js"
  ],
  "一张图里至少检出几个才算": [
   "flow.py"
@@ -1925,6 +2122,9 @@
   "flow.py"
  ],
  "一张图里至少检出几个目标才算命中": [
+  "flow.py"
+ ],
+ "一张照片只能有一个类别": [
   "flow.py"
  ],
  "一次": [
@@ -2067,6 +2267,7 @@
  "上一页": [
   "app.js",
   "datasets.js",
+  "prefilter.js",
   "types.js"
  ],
  "上下翻转概率": [
@@ -2135,6 +2336,15 @@
  "上次传到 {0}%，从断点继续…": [
   "models.js"
  ],
+ "上次导出 {0}": [
+  "prefilter.js"
+ ],
+ "上次导出 {0}：新链 {1} 张，已有 {2} 张 → {3}": [
+  "prefilter.js"
+ ],
+ "上次扫描 {0}": [
+  "prefilter.js"
+ ],
  "上次报警": [
   "streams.js"
  ],
@@ -2156,12 +2366,16 @@
  "上线：模型中心「设为正式使用」→ 智能质检 / 导出到手机": [
   "overview.js"
  ],
+ "上面的照片类型下拉框列的是默认图库的类型": [
+  "flow.py"
+ ],
  "下一张": [
   "app.js",
   "types.js"
  ],
  "下一张 ›": [
-  "app.js"
+  "app.js",
+  "prefilter.js"
  ],
  "下一张（→）": [
   "types.js"
@@ -2181,6 +2395,7 @@
  "下一页": [
   "app.js",
   "datasets.js",
+  "prefilter.js",
   "types.js"
  ],
  "下一页 ➡️": [
@@ -2189,12 +2404,19 @@
  "下划线": [
   "app.js",
   "hub.py",
+  "imagelib.py",
   "models.js",
   "overview.js",
   "types.js"
  ],
  "下划线或短横线": [
   "categories.js"
+ ],
+ "下次扫描会把精选的又扫进来": [
+  "prefilter.py"
+ ],
+ "下次接着扫": [
+  "prefilter.py"
  ],
  "下的一个子文件夹": [
   "flow.py"
@@ -2313,6 +2535,9 @@
  "不勾 = 模型预测的也补上": [
   "flow.py"
  ],
+ "不占额外空间": [
+  "prefilter.js"
+ ],
  "不参与训练": [
   "app.js",
   "flow.py"
@@ -2375,8 +2600,18 @@
  "不同站点或不重复": [
   "labels.py"
  ],
+ "不含淘汰的": [
+  "prefilter.js"
+ ],
+ "不在同一个网络的海康摄像头选": [
+  "streams.js"
+ ],
+ "不在同一网络时": [
+  "streams.py"
+ ],
  "不填": [
-  "app.js"
+  "app.js",
+  "types.js"
  ],
  "不填 =": [
   "flow.py"
@@ -2418,6 +2653,12 @@
  "不对的选中后点「✕ 忽略所选建议」，以后不会再建议成本类型。": [
   "types.js"
  ],
+ "不导出": [
+  "prefilter.js"
+ ],
+ "不导出的": [
+  "prefilter.js"
+ ],
  "不属于哪个子项目": [
   "flow.py"
  ],
@@ -2443,7 +2684,8 @@
   "hub.py"
  ],
  "不改": [
-  "flow.py"
+  "flow.py",
+  "types.js"
  ],
  "不改任何东西": [
   "flow.py"
@@ -2462,6 +2704,12 @@
  ],
  "不是合法的 JSON": [
   "flow.js"
+ ],
+ "不是本图库目录里的图片": [
+  "imagelib.py"
+ ],
+ "不是本图库目录里的图片：{0}": [
+  "imagelib.py"
  ],
  "不是现场照片": [
   "flow.py",
@@ -2485,6 +2733,9 @@
  "不用设为正式使用": [
   "guide.js"
  ],
+ "不用重扫": [
+  "prefilter.js"
+ ],
  "不用重新分拣": [
   "flow.py"
  ],
@@ -2503,6 +2754,9 @@
  "不知道参数怎么填？": [
   "guide.js"
  ],
+ "不知道图片尺寸": [
+  "flow.py"
+ ],
  "不确定": [
   "review.html",
   "review.js"
@@ -2514,8 +2768,20 @@
   "guide.js",
   "settings.js"
  ],
+ "不移动不改名": [
+  "prefilter.js"
+ ],
  "不等待": [
   "developers.js"
+ ],
+ "不管分数": [
+  "prefilter.js"
+ ],
+ "不管分数，一定不导出（快捷键 D）": [
+  "prefilter.js"
+ ],
+ "不管分数，一定导出（快捷键 K）": [
+  "prefilter.js"
  ],
  "不能为空": [
   "hub.py"
@@ -2544,6 +2810,12 @@
  ],
  "不补": [
   "flow.py"
+ ],
+ "不要": [
+  "prefilter.js"
+ ],
+ "不要 {1}": [
+  "prefilter.js"
  ],
  "不要删": [
   "app.js",
@@ -2618,6 +2890,9 @@
  ],
  "不通过的照片在图库里标为": [
   "flow.py"
+ ],
+ "不重复": [
+  "prefilter.js"
  ],
  "不量化": [
   "models.js"
@@ -2714,13 +2989,17 @@
  "个节点": [
   "workflow.js"
  ],
+ "中": [
+  "prefilter.js"
+ ],
  "中文": [
   "overview.js",
   "types.js",
   "vlmcheck.py"
  ],
  "中文名": [
-  "datasets.js"
+  "datasets.js",
+  "types.js"
  ],
  "中文名 *": [
   "types.js"
@@ -2747,6 +3026,7 @@
   "types.js"
  ],
  "中英文都要有": [
+  "imagelib.py",
   "types.js"
  ],
  "中选出存在的": [
@@ -2880,6 +3160,12 @@
  "也可以 Ctrl+V 粘贴截图": [
   "models.js"
  ],
+ "也可以在 App 里自己关": [
+  "streams.js"
+ ],
+ "也可以在这里点": [
+  "flow.py"
+ ],
  "也可以填在下面两格": [
   "streams.js"
  ],
@@ -2903,6 +3189,9 @@
  ],
  "也越占显卡": [
   "streams.js"
+ ],
+ "互不干扰": [
+  "types.js"
  ],
  "交互式文档在": [
   "guide.js"
@@ -2928,6 +3217,12 @@
  "交通标志有方向": [
   "templates.js"
  ],
+ "亮度 {4}": [
+  "prefilter.js"
+ ],
+ "亮度 {7}": [
+  "prefilter.js"
+ ],
  "亮度变化": [
   "settings.js"
  ],
@@ -2946,6 +3241,9 @@
  "人删框比画框快": [
   "settings.js"
  ],
+ "人工": [
+  "prefilter.js"
+ ],
  "人工复核": [
   "flow.py"
  ],
@@ -2958,6 +3256,9 @@
  ],
  "人工已确认：草多 {4}、不多 {5}、不确定 {6}。": [
   "review.js"
+ ],
+ "人工改判": [
+  "prefilter.js"
  ],
  "人工标注": [
   "hub.py"
@@ -2989,6 +3290,15 @@
  ],
  "人工确认优先": [
   "flow.py"
+ ],
+ "人工确认过类型的照片不扫": [
+  "types.js"
+ ],
+ "人工：不要": [
+  "prefilter.js"
+ ],
+ "人工：要": [
+  "prefilter.js"
  ],
  "人来改": [
   "guide.js"
@@ -3048,6 +3358,12 @@
  "从低到高排：最上面的类别最弱，优先给它多标数据、检查标注是否一致。": [
   "models.js"
  ],
+ "从列表里去掉图库": [
+  "types.js"
+ ],
+ "从列表里去掉图库“{0}”？照片和数据文件都不删。": [
+  "types.js"
+ ],
  "从原始图片里按照片类型": [
   "flow.py"
  ],
@@ -3070,7 +3386,8 @@
   "app.js"
  ],
  "从头扫": [
-  "flow.py"
+  "flow.py",
+  "types.js"
  ],
  "从它开始训比从零开始快得多": [
   "models.js"
@@ -3168,6 +3485,9 @@
  "代号": [
   "types.js"
  ],
+ "代号 {0}": [
+  "types.js"
+ ],
  "代码": [
   "overview.js"
  ],
@@ -3204,12 +3524,6 @@
  "以前⑤类型归类的结果，如 /data/pipeline/work/emb/pred.json": [
   "flow.py"
  ],
- "以前回收没通过": [
-  "app.js"
- ],
- "以前回收没通过、但已经画了框的": [
-  "app.js"
- ],
  "以前抽的旧图用": [
   "guide.js"
  ],
@@ -3239,6 +3553,9 @@
   "flow.py"
  ],
  "以后不会再建议成本类型": [
+  "types.js"
+ ],
+ "以后再加": [
   "types.js"
  ],
  "以后在": [
@@ -3376,9 +3693,6 @@
  "会把所有已复核的标注打包成一个新版本，按“{0}”自动编号；验证 {1}%、测试 {2}%（随机种子 {3}，同一张图每次都分到同一部分）。": [
   "datasets.js"
  ],
- "会把这些图带着已有的框送进当前 Label Studio 项目": [
-  "app.js"
- ],
  "会推荐下一个": [
   "flow.html"
  ],
@@ -3390,6 +3704,9 @@
  ],
  "会自动改为从底座开始": [
   "models.js"
+ ],
+ "会自动有": [
+  "types.js"
  ],
  "会自动配好任务类型": [
   "overview.js"
@@ -3403,7 +3720,7 @@
  "但少": [
   "flow.py"
  ],
- "但已经画了框的": [
+ "但引擎没收进来": [
   "app.js"
  ],
  "但更慢": [
@@ -3432,11 +3749,20 @@
  "位置的变化": [
   "settings.js"
  ],
+ "低": [
+  "prefilter.js"
+ ],
  "低了说明漏检多": [
   "models.js"
  ],
  "低了说明误报多": [
   "models.js"
+ ],
+ "低于多少算太模糊": [
+  "prefilter.js"
+ ],
+ "低于多少算太模糊（淘汰）": [
+  "prefilter.js"
  ],
  "低于它不算找到": [
   "settings.js"
@@ -3591,6 +3917,9 @@
  "保留人工复核结果": [
   "app.js"
  ],
+ "保留原来的类别没改": [
+  "flow.py"
+ ],
  "保证先扫描再读取": [
   "flow.py"
  ],
@@ -3667,12 +3996,21 @@
   "datasets.js",
   "flow.py"
  ],
+ "允许使用的图片目录": [
+  "prefilter.js"
+ ],
+ "允许使用的图片目录：": [
+  "prefilter.js"
+ ],
  "充分": [
   "models.js",
   "settings.js"
  ],
  "先从⑤归类为": [
   "flow.py"
+ ],
+ "先停止": [
+  "prefilter.py"
  ],
  "先到工作台": [
   "datasets.js"
@@ -3683,6 +4021,9 @@
  "先去 Label Studio 标注并回收": [
   "models.js"
  ],
+ "先去初选": [
+  "types.js"
+ ],
  "先双击抽看几张": [
   "types.js"
  ],
@@ -3691,6 +4032,7 @@
  ],
  "先在": [
   "guide.js",
+  "imagelib.py",
   "learning.py",
   "types.js"
  ],
@@ -3733,14 +4075,26 @@
  "先在项目设置里把测试比例设为 0.1": [
   "labels.py"
  ],
+ "先建一批照片类型": [
+  "types.js"
+ ],
  "先打包一个数据集再来查标注错误": [
   "qa.py"
+ ],
+ "先把画质差的挡在外面": [
+  "prefilter.js"
+ ],
+ "先把画质差的挡在外面：逐张算分辨率、清晰度、曝光、对比度，找出重复和几乎一样的照片；按档看图、人工改判；入选的": [
+  "prefilter.js"
  ],
  "先抽几张看看再打包": [
   "datasets.js"
  ],
  "先抽看几张": [
   "models.js"
+ ],
+ "先新增几个": [
+  "types.js"
  ],
  "先有一个": [
   "guide.js"
@@ -3755,22 +4109,34 @@
   "guide.js"
  ],
  "先点": [
-  "app.js"
+  "app.js",
+  "imagelib.py"
  ],
  "先点击输出": [
   "workflow.js"
  ],
+ "先点进一个目录": [
+  "prefilter.js"
+ ],
  "先点选照片": [
+  "prefilter.js",
   "types.js"
  ],
  "先点选照片（可多选）": [
+  "prefilter.js",
   "types.js"
+ ],
+ "先用": [
+  "streams.js"
  ],
  "先用少量新类别标注训一个初版模型": [
   "app.js"
  ],
  "先用少量新类别标注训一个模型": [
   "flow.py"
+ ],
+ "先用萤石云视频 App 把设备添加到开放平台对应的账号": [
+  "ezviz.py"
  ],
  "先画框": [
   "hub.py"
@@ -3812,6 +4178,9 @@
  "先选一个已有的数据集版本（“打包最新标注”要在服务器上先打包，再回来下载）。": [
   "models.js"
  ],
+ "先选一个有模型的子项目": [
+  "types.js"
+ ],
  "先选一个模板": [
   "overview.js"
  ],
@@ -3836,11 +4205,11 @@
  "先选权重或本场景的模型": [
   "flow.js"
  ],
+ "入选的": [
+  "prefilter.js"
+ ],
  "全子项目质检": [
   "inspect.js"
- ],
- "全平台共用": [
-  "flow.py"
  ],
  "全挤在中间": [
   "datasets.js"
@@ -3853,13 +4222,18 @@
   "streams.js"
  ],
  "全选本页": [
+  "prefilter.js",
   "types.js"
+ ],
+ "全选这一组": [
+  "app.js"
  ],
  "全部": [
   "app.js",
   "datasets.js",
   "flow.js",
   "inspect.js",
+  "prefilter.js",
   "review.html",
   "streams.js",
   "types.js"
@@ -3883,7 +4257,8 @@
   "models.js"
  ],
  "全部照片": [
-  "inspect.js"
+  "inspect.js",
+  "types.js"
  ],
  "全部照片归类分布": [
   "types.js"
@@ -3898,7 +4273,8 @@
   "datasets.js"
  ],
  "全部重扫": [
-  "flow.py"
+  "flow.py",
+  "types.js"
  ],
  "全部（含已排除）": [
   "app.js"
@@ -3924,6 +4300,9 @@
  "共 {0} 张": [
   "datasets.js",
   "flow.js",
+  "imagelib.py",
+  "prefilter.js",
+  "prefilter.py",
   "types.js"
  ],
  "共 {0} 张 · 人工确认 {1} · 没把握 {2}": [
@@ -3937,6 +4316,9 @@
  ],
  "共 {0} 张，显示 {1}–{2}": [
   "datasets.js"
+ ],
+ "共 {0} 张，要打分 {1} 张": [
+  "prefilter.py"
  ],
  "共 {0} 张：不合格 {1}，需注意 {2}，合格 {3}{4}": [
   "flow.js"
@@ -3994,15 +4376,19 @@
   "models.js",
   "settings.js",
   "streams.js",
+  "types.js",
   "ui.js"
  ],
  "关闭自动回收": [
   "app.js"
  ],
  "其他": [
+  "app.js",
   "datasets.js",
   "flow.py",
+  "imagelib.py",
   "streams.py",
+  "types.js",
   "typesuggest.py"
  ],
  "其他 Agent": [
@@ -4010,6 +4396,9 @@
  ],
  "其他 {0} 类": [
   "datasets.js"
+ ],
+ "其他/无关": [
+  "imagelib.py"
  ],
  "其他/无关或没有类型": [
   "flow.py"
@@ -4035,11 +4424,18 @@
  "兼容": [
   "app.js"
  ],
+ "兼容好": [
+  "streams.js"
+ ],
  "内容去重后": [
   "app.js"
  ],
  "再分批选": [
   "app.js"
+ ],
+ "再到": [
+  "streams.js",
+  "types.js"
  ],
  "再到标注系统点": [
   "guide.js"
@@ -4085,7 +4481,11 @@
   "app.js"
  ],
  "再点": [
-  "guide.js"
+  "guide.js",
+  "types.js"
+ ],
+ "再点一次接着扫": [
+  "types.js"
  ],
  "再点另一节点输入完成连线": [
   "workflow.js"
@@ -4122,6 +4522,9 @@
  "再选 Category reviewed 确认": [
   "hub.py"
  ],
+ "再选照片类型": [
+  "types.js"
+ ],
  "写 {n} 自动编号": [
   "flow.py"
  ],
@@ -4139,6 +4542,10 @@
  ],
  "写进引擎目录的 .env": [
   "flow.py"
+ ],
+ "准备中…": [
+  "imagelib.py",
+  "types.js"
  ],
  "准备分析 {3} 帧…": [
   "models.js"
@@ -4165,8 +4572,29 @@
  "减半": [
   "guide.js"
  ],
+ "几乎一样": [
+  "prefilter.js"
+ ],
+ "几乎一样的每组只导出分最高的一张": [
+  "prefilter.js"
+ ],
  "几乎一样的照片": [
   "app.js"
+ ],
+ "几乎一样：哈希相差不超过几位": [
+  "prefilter.js"
+ ],
+ "几乎没有内容": [
+  "prefilter.py"
+ ],
+ "几乎没有内容（对比度 {0}）": [
+  "prefilter.py"
+ ],
+ "几乎纯色的图": [
+  "prefilter.js"
+ ],
+ "几份标注不一致": [
+  "flow.py"
  ],
  "几分钟": [
   "guide.js",
@@ -4187,6 +4615,9 @@
  "出错": [
   "streams.js"
  ],
+ "分低的在前": [
+  "prefilter.js"
+ ],
  "分别训练多少轮": [
   "settings.js"
  ],
@@ -4194,13 +4625,17 @@
   "backends_tv.py",
   "flow.py",
   "models.js",
-  "templates.js"
+  "templates.js",
+  "types.js"
  ],
  "分割 = 画轮廓": [
   "overview.js"
  ],
  "分割支持": [
   "qa.py"
+ ],
+ "分属 2 个以上类型再训练": [
+  "imagelib.py"
  ],
  "分成": [
   "flow.py"
@@ -4213,6 +4648,18 @@
  ],
  "分拣结果回到 unknown": [
   "flow.py"
+ ],
+ "分数 = 分辨率 35% + 清晰度 35% + 曝光 15% + 对比度 15%": [
+  "prefilter.js"
+ ],
+ "分数 = 分辨率 35% + 清晰度 35% + 曝光 15% + 对比度 15%（沿用原来的图片分拣脚本）": [
+  "prefilter.js"
+ ],
+ "分数分布": [
+  "prefilter.js"
+ ],
+ "分数分布（共 {0} 张，不含淘汰的）": [
+  "prefilter.js"
  ],
  "分数很高但实际不好用": [
   "guide.js"
@@ -4247,6 +4694,7 @@
   "models.js",
   "tasks-ui.js",
   "templates.js",
+  "types.js",
   "workflow.js"
  ],
  "分类 = 整张图是什么": [
@@ -4274,6 +4722,9 @@
  "分类器只从人工确认过的照片学习": [
   "app.js"
  ],
+ "分类器就更准": [
+  "types.js"
+ ],
  "分类器版本": [
   "flow.py"
  ],
@@ -4291,6 +4742,12 @@
  ],
  "分类模型": [
   "flow.py"
+ ],
+ "分类模型忽略这项": [
+  "types.js"
+ ],
+ "分类模型扫全部照片": [
+  "types.js"
  ],
  "分类模型都行": [
   "flow.py"
@@ -4321,6 +4778,21 @@
  "分类：整图单选": [
   "tasks-ui.js"
  ],
+ "分辨率分": [
+  "prefilter.js"
+ ],
+ "分辨率太低": [
+  "prefilter.py"
+ ],
+ "分辨率太低（{0}×{1}）": [
+  "prefilter.py"
+ ],
+ "分高的在前": [
+  "prefilter.js"
+ ],
+ "切到别的图库后": [
+  "types.js"
+ ],
  "切到右上角": [
   "flow.js"
  ],
@@ -4331,6 +4803,7 @@
   "inspect.js"
  ],
  "切换": [
+  "prefilter.js",
   "types.js"
  ],
  "切换别名": [
@@ -4365,6 +4838,9 @@
  "列出会复制哪些文件": [
   "flow.py"
  ],
+ "列文件…": [
+  "prefilter.py"
+ ],
  "列文件中…": [
   "flow.js"
  ],
@@ -4395,10 +4871,44 @@
  "初始权重路径": [
   "app.js"
  ],
+ "初选": [
+  "app.js",
+  "prefilter.html",
+  "prefilter.js",
+  "types.js",
+  "ui.js"
+ ],
+ "初选 · LOTA": [
+  "prefilter.html"
+ ],
+ "初选又导出了新的之后点这个": [
+  "types.js"
+ ],
+ "初选导出的硬链接": [
+  "types.js"
+ ],
+ "初选导出的硬链接：原图目录里的同一张也一起移进回收站，恢复时两处都回来；永久删除后磁盘空间才真正释放。": [
+  "types.js"
+ ],
  "删了或移走了": [
   "app.js"
  ],
  "删原图文件": [
+  "flow.py"
+ ],
+ "删掉这个框": [
+  "flow.py"
+ ],
+ "删掉这个框，或画大一点。": [
+  "flow.py"
+ ],
+ "删掉重复的任务": [
+  "flow.py"
+ ],
+ "删掉重复的任务，只留一份。": [
+  "flow.py"
+ ],
+ "删掉错的那份": [
   "flow.py"
  ],
  "删错框": [
@@ -4409,6 +4919,7 @@
   "app.js",
   "categories.js",
   "inspect.js",
+  "prefilter.js",
   "streams.js",
   "types.js"
  ],
@@ -4427,6 +4938,9 @@
  "删除于 {1}{2}": [
   "types.js"
  ],
+ "删除初选记录": [
+  "prefilter.js"
+ ],
  "删除所选图片": [
   "app.js"
  ],
@@ -4443,9 +4957,6 @@
  "删除的照片": [
   "types.js"
  ],
- "删除的照片先放在这里": [
-  "types.js"
- ],
  "删除类别": [
   "categories.js"
  ],
@@ -4457,6 +4968,9 @@
  ],
  "删除规则": [
   "inspect.js"
+ ],
+ "删除记录": [
+  "prefilter.js"
  ],
  "删除这张": [
   "app.js"
@@ -4517,12 +5031,27 @@
  "到新版编辑器里选一个模板开始": [
   "workflow.js"
  ],
+ "到照片类型页里删": [
+  "prefilter.js"
+ ],
  "到第几秒结束": [
   "flow.py"
+ ],
+ "到精选目录": [
+  "prefilter.js"
+ ],
+ "到精选目录（原图不动，不占额外空间）。精选目录再到“照片类型”页建成图库。原图目录补了新照片，点“增量更新”只处理新增的。": [
+  "prefilter.js"
  ],
  "刷新": [
   "app.js",
   "streams.js"
+ ],
+ "刷新失败": [
+  "app.js"
+ ],
+ "刷新失败：": [
+  "app.js"
  ],
  "刷新页面重试": [
   "streams.py"
@@ -4563,10 +5092,14 @@
  "加了以后：①以前的标注没检查过新类别，要在“标注系统”里“送回复核”；②当前 Label Studio 项目里没有这个标签的话，页面会提示新建一个。": [
   "app.js"
  ],
- "加新类别前已通过的旧标注": [
-  "app.js"
+ "加新类别前标的": [
+  "flow.py"
+ ],
+ "加新类别前标的，没检查过新类别": [
+  "flow.py"
  ],
  "加类别前的旧标注": [
+  "app.js",
   "flow.py"
  ],
  "加类别前训练的旧模型和新数据集类别不一样": [
@@ -4585,12 +5118,15 @@
   "index.html"
  ],
  "加载中…": [
+  "app.js",
   "datasets.html",
   "developers.html",
   "inspect.html",
   "models.html",
   "models.js",
   "overview.html",
+  "prefilter.html",
+  "prefilter.js",
   "report.html",
   "settings.html",
   "streams.html",
@@ -4714,6 +5250,9 @@
  "勾选权重里的类别": [
   "flow.py"
  ],
+ "勾选类别": [
+  "types.js"
+ ],
  "包含子文件夹": [
   "flow.py"
  ],
@@ -4750,7 +5289,11 @@
   "templates.js"
  ],
  "单击选中": [
+  "prefilter.js",
   "types.js"
+ ],
+ "单击选中，双击看大图（← → 切换，K 要 / D 不要 / A 按分数）": [
+  "prefilter.js"
  ],
  "单击选中，双击看大图（滚轮缩放、拖动、← → 切换）": [
   "types.js"
@@ -4766,6 +5309,9 @@
  ],
  "占用 {2}%": [
   "overview.js"
+ ],
+ "占萤石账号的流量额度": [
+  "streams.js"
  ],
  "卡片上点": [
   "guide.js"
@@ -4789,6 +5335,12 @@
  "压缩格式的 DICOM 需要另装解码库": [
   "media.py"
  ],
+ "原位置已有同名文件": [
+  "imagelib.py"
+ ],
+ "原位置已有同名文件，未恢复：{0}": [
+  "imagelib.py"
+ ],
  "原因": [
   "agent.py"
  ],
@@ -4807,6 +5359,7 @@
  "原图不动": [
   "flow.py",
   "guide.js",
+  "prefilter.js",
   "toolbox.js"
  ],
  "原图与分拣": [
@@ -4827,14 +5380,30 @@
  "原图加载失败：": [
   "types.js"
  ],
+ "原图和已经导出的精选目录都不动": [
+  "prefilter.js"
+ ],
  "原图在回收站": [
   "phototypes.py"
  ],
  "原图文件保留": [
   "app.js"
  ],
+ "原图目录": [
+  "prefilter.js"
+ ],
+ "原图目录补了新照片": [
+  "prefilter.js",
+  "types.js"
+ ],
+ "原图目录里的同一张也一起移进回收站": [
+  "types.js"
+ ],
  "原图目录里的文件会被真正删掉": [
   "app.js"
+ ],
+ "原图目录（含子目录）": [
+  "prefilter.js"
  ],
  "原地登记": [
   "flow.py"
@@ -4855,6 +5424,12 @@
  "原文件不动": [
   "flow.py"
  ],
+ "原目录里的 {0} 处也链回去了": [
+  "imagelib.py"
+ ],
+ "原目录里的同一张也一起移走了": [
+  "imagelib.py"
+ ],
  "去 Label Studio 改": [
   "datasets.js",
   "guide.js"
@@ -4867,6 +5442,9 @@
  ],
  "去 Label Studio 标注 →": [
   "toolbox.js"
+ ],
+ "去初选": [
+  "types.js"
  ],
  "去向": [
   "flow.py"
@@ -4893,6 +5471,9 @@
  "去掉几乎一样的照片": [
   "flow.py"
  ],
+ "去掉目录里已没有的 {0} 张": [
+  "imagelib.py"
+ ],
  "去本地电脑运行吧": [
   "models.js"
  ],
@@ -4902,6 +5483,9 @@
  "去模型中心": [
   "datasets.js"
  ],
+ "去照片类型建图库": [
+  "prefilter.js"
+ ],
  "去补成绩差的类别或场景": [
   "guide.js",
   "models.js"
@@ -4910,7 +5494,8 @@
   "hub.py"
  ],
  "去重": [
-  "flow.py"
+  "flow.py",
+  "prefilter.js"
  ],
  "去雾": [
   "guide.js",
@@ -4931,6 +5516,9 @@
  "参数都有下拉选项和说明": [
   "workflow.js"
  ],
+ "参数错误": [
+  "ezviz.py"
+ ],
  "参考 Ultralytics Platform": [
   "datasets.js"
  ],
@@ -4944,6 +5532,7 @@
   "app.js"
  ],
  "双击看大图": [
+  "prefilter.js",
   "types.js"
  ],
  "反光": [
@@ -4997,6 +5586,18 @@
  "发电机房": [
   "types.js"
  ],
+ "取把握最大的那条": [
+  "types.js"
+ ],
+ "取流协议": [
+  "streams.js"
+ ],
+ "取流协议只能是 flv": [
+  "ezviz.py"
+ ],
+ "取流协议只能是 flv / hls / rtmp": [
+  "ezviz.py"
+ ],
  "取流地址": [
   "streams.js"
  ],
@@ -5005,10 +5606,14 @@
   "inspect.js",
   "models.js",
   "overview.js",
+  "prefilter.js",
   "settings.js",
   "streams.js",
   "toolbox.js",
   "types.js"
+ ],
+ "取消全选": [
+  "app.js"
  ],
  "取消固定": [
   "datasets.js",
@@ -5044,6 +5649,18 @@
  "口令无效，请刷新页面重新输入": [
   "models.js"
  ],
+ "另一个图库正在建索引或训练": [
+  "imagelib.py"
+ ],
+ "另一个图库正在建索引或训练，等它跑完再来": [
+  "imagelib.py"
+ ],
+ "只从列表里去掉": [
+  "types.js"
+ ],
+ "只从列表里去掉；照片、样板、索引文件都不删": [
+  "types.js"
+ ],
  "只从本场景删除": [
   "app.js"
  ],
@@ -5062,6 +5679,24 @@
  "只分流": [
   "flow.py"
  ],
+ "只删初选记录": [
+  "prefilter.js"
+ ],
+ "只删初选记录（打分、改判）；原图和已经导出的精选目录都不动": [
+  "prefilter.js"
+ ],
+ "只删这个初选任务的打分和人工改判记录": [
+  "prefilter.js"
+ ],
+ "只删这个初选任务的打分和人工改判记录。原图目录、已经导出的精选目录都不动。": [
+  "prefilter.js"
+ ],
+ "只加到当前图库": [
+  "types.js"
+ ],
+ "只加到当前图库“{0}”。先确认几张样板，再“重新训练并归类全部”，模型才会往这个类型里归。": [
+  "types.js"
+ ],
  "只在人工确认的图上": [
   "types.js"
  ],
@@ -5077,6 +5712,15 @@
  "只在这类照片里找（可不填）": [
   "flow.py"
  ],
+ "只增不减": [
+  "prefilter.js"
+ ],
+ "只处理新增或改过的文件": [
+  "prefilter.js"
+ ],
+ "只处理新增的": [
+  "prefilter.js"
+ ],
  "只对你确定没问题的批次用": [
   "flow.py"
  ],
@@ -5088,6 +5732,12 @@
  ],
  "只扫“照片类型”页归为这一类的原图，又快又准，如 交流配电/空开；空 = 扫下面的文件夹": [
   "flow.py"
+ ],
+ "只扫现在归在": [
+  "types.js"
+ ],
+ "只扫现在归在「{0}」里的（{1} 张）": [
+  "types.js"
  ],
  "只扫现在归在这些照片类型里的照片": [
   "flow.py"
@@ -5147,6 +5797,9 @@
  "只显示前 {0} 项": [
   "combo.js"
  ],
+ "只显示这个目录里的照片": [
+  "types.js"
+ ],
  "只有": [
   "settings.js"
  ],
@@ -5198,6 +5851,9 @@
  "只用这些规则（可不填）": [
   "flow.py"
  ],
+ "只留一份": [
+  "flow.py"
+ ],
  "只看哪块区域": [
   "flow.py"
  ],
@@ -5206,6 +5862,15 @@
  ],
  "只看照片主体，不要被角落里的小东西影响判断。": [
   "hub.py"
+ ],
+ "只给新增或改过的文件打分": [
+  "prefilter.js"
+ ],
+ "只给新增或改过的文件打分；目录里已经没有的去掉": [
+  "prefilter.js"
+ ],
+ "只给新照片算特征": [
+  "types.js"
  ],
  "只统计": [
   "flow.py"
@@ -5224,6 +5889,12 @@
  ],
  "只记录模态和部位": [
   "flow.py"
+ ],
+ "只读原图": [
+  "prefilter.js"
+ ],
+ "只读原图、不移动不改名。建好后点“扫描”开始打分；同一个目录只会有一个初选任务。": [
+  "prefilter.js"
  ],
  "只输出JSON": [
   "vlmcheck.py"
@@ -5254,7 +5925,11 @@
   "flow.py",
   "inspect.js",
   "m.js",
+  "prefilter.js",
   "streams.js",
+  "types.js"
+ ],
+ "可不填，以后再加。每行一个：中文名,英文名": [
   "types.js"
  ],
  "可不填，如：A 区 3 号楼": [
@@ -5262,6 +5937,12 @@
  ],
  "可不填，自动生成 custom_N；如 generator_room": [
   "types.js"
+ ],
+ "可不填，默认用目录名": [
+  "prefilter.js"
+ ],
+ "可不填；6 位大写字母": [
+  "streams.js"
  ],
  "可不填；只影响记录里的标注": [
   "streams.js"
@@ -5274,6 +5955,9 @@
  ],
  "可不选": [
   "flow.py"
+ ],
+ "可以关掉这个窗口": [
+  "types.js"
  ],
  "可以关掉页面": [
   "models.js"
@@ -5292,6 +5976,9 @@
  ],
  "可以只把通过的送去标注": [
   "flow.py"
+ ],
+ "可以在下面新建子目录": [
+  "prefilter.js"
  ],
  "可以带 {dataset}": [
   "models.js"
@@ -5321,9 +6008,6 @@
  "可以设多条规则": [
   "flow.py"
  ],
- "可以选它给旧图预画新类别的框": [
-  "app.js"
- ],
  "可以随时切回旧版本": [
   "flow.py"
  ],
@@ -5346,6 +6030,7 @@
   "flow.js",
   "flow.py",
   "inspect.js",
+  "prefilter.js",
   "types.js"
  ],
  "可归类待复核": [
@@ -5414,6 +6099,9 @@
  ],
  "可能多标": [
   "qa.py"
+ ],
+ "可能已删除": [
+  "imagelib.py"
  ],
  "可能已过期": [
   "hub.py"
@@ -5527,6 +6215,9 @@
  "同一个文件夹": [
   "flow.py"
  ],
+ "同一个目录只会有一个初选任务": [
+  "prefilter.js"
+ ],
  "同一场景可建立多套任务": [
   "tasks-ui.js"
  ],
@@ -5540,6 +6231,15 @@
   "flow.py"
  ],
  "同一张图判断过会复用结果": [
+  "flow.py"
+ ],
+ "同一张图有多个任务且标得不一样": [
+  "flow.py"
+ ],
+ "同一张图有多人标注且结果不同": [
+  "flow.py"
+ ],
+ "同一张图有多人标注且结果不同：删掉错的那份，或把对的那份设为 Ground Truth。": [
   "flow.py"
  ],
  "同一张图每次都分到同一部分": [
@@ -5615,11 +6315,19 @@
  ],
  "名称": [
   "overview.js",
+  "prefilter.js",
   "streams.js",
+  "types.js",
   "workflow.js"
+ ],
+ "名称 *": [
+  "types.js"
  ],
  "名称里带 left": [
   "settings.js"
+ ],
+ "后来改判成": [
+  "prefilter.js"
  ],
  "后生效": [
   "categories.js"
@@ -5646,6 +6354,9 @@
  "否则已有标注和模型的类别编号会错位": [
   "app.js"
  ],
+ "否则拉到的画面解不出来": [
+  "streams.js"
+ ],
  "否则数据越来越偏": [
   "guide.js"
  ],
@@ -5658,11 +6369,18 @@
  "含中文参数说明": [
   "developers.js"
  ],
+ "含人工改判": [
+  "prefilter.js"
+ ],
  "含删除过": [
   "flow.py"
  ],
  "含子文件夹": [
   "flow.py"
+ ],
+ "含子目录": [
+  "prefilter.js",
+  "types.js"
  ],
  "含已排除": [
   "app.js"
@@ -5764,6 +6482,9 @@
  "和人工标注对比": [
   "datasets.js"
  ],
+ "和另一张几乎一样": [
+  "prefilter.js"
+ ],
  "和巡检无关的照片": [
   "app.js"
  ],
@@ -5797,6 +6518,9 @@
  "品牌 / 接入方式": [
   "streams.js"
  ],
+ "哈希相差不超过几位": [
+  "prefilter.js"
+ ],
  "哪些类别容易认错": [
   "hub.py"
  ],
@@ -5805,6 +6529,9 @@
  ],
  "器官分割": [
   "templates.js"
+ ],
+ "回到按分数自动判断": [
+  "prefilter.js"
  ],
  "回到本类照片": [
   "types.js"
@@ -5844,14 +6571,29 @@
  "回收标注（选参数）": [
   "app.js"
  ],
+ "回收站": [
+  "types.js"
+ ],
  "回收站是空的": [
   "types.js"
+ ],
+ "回收站里没有这张": [
+  "imagelib.py"
+ ],
+ "回收站里没有这张：{0}": [
+  "imagelib.py"
  ],
  "回收站里的 {0} 张照片": [
   "types.js"
  ],
  "回收站里的 {0} 张照片（{1}）会从硬盘上永久抹掉，不能恢复。": [
   "types.js"
+ ],
+ "回收站里的文件不见了": [
+  "imagelib.py"
+ ],
+ "回收站里的文件不见了：{0}": [
+  "imagelib.py"
  ],
  "回收跳过": [
   "datasets.js"
@@ -5968,6 +6710,25 @@
  "图少选 150 轮": [
   "guide.js"
  ],
+ "图库": [
+  "flow.py",
+  "types.js"
+ ],
+ "图库 = 一个图片目录": [
+  "types.js"
+ ],
+ "图库“{0}”里没有“{1}”类型的照片": [
+  "flow.py"
+ ],
+ "图库目录": [
+  "types.js"
+ ],
+ "图库目录：只显示这个目录里的照片": [
+  "types.js"
+ ],
+ "图库（可不填）": [
+  "flow.py"
+ ],
  "图片": [
   "datasets.js",
   "developers.js",
@@ -5984,6 +6745,12 @@
   "models.js"
  ],
  "图片内容的 SHA-256": [
+  "flow.py"
+ ],
+ "图片可能被换过": [
+  "flow.py"
+ ],
+ "图片可能被换过：重新送这张图标注。": [
   "flow.py"
  ],
  "图片太大": [
@@ -6010,6 +6777,9 @@
   "app.js",
   "flow.py"
  ],
+ "图片目录 *": [
+  "types.js"
+ ],
  "图片输入通过节点端口连接": [
   "workflow.js"
  ],
@@ -6022,8 +6792,20 @@
  "图片：jpg / png / bmp / webp；视频：mp4 / mov / avi / mkv / webm 等。也可以 Ctrl+V 粘贴截图；一次拖多个，点下面的小图切换": [
   "models.js"
  ],
+ "图里有目标就画框并选 Targets reviewed": [
+  "flow.py"
+ ],
+ "图里有目标就画框并选 Targets reviewed；没有目标就选 No target。": [
+  "flow.py"
+ ],
  "图里确实没有目标才选 No target": [
   "app.js"
+ ],
+ "图里认出规则里的类别": [
+  "types.js"
+ ],
+ "图里认出规则里的类别，就建议归到对应的照片类型（左侧类型后面的 💡 数字）。": [
+  "types.js"
  ],
  "在 Label Studio 一提交标注": [
   "overview.js"
@@ -6040,11 +6822,20 @@
  "在 Label Studio 建一个视频跟踪标注项目：关键帧画框，中间帧自动插值；类别 = 本子项目的类别。": [
   "flow.py"
  ],
+ "在 Label Studio 把框的 Rotation 改成 0 或重画一个水平框": [
+  "flow.py"
+ ],
  "在 Label Studio 提交": [
   "datasets.js"
  ],
  "在 Label Studio 提交、并回收进来的": [
   "datasets.js"
+ ],
+ "在 Label Studio 提交了": [
+  "app.js"
+ ],
+ "在 Label Studio 提交了、但引擎没收进来（或要重新确认）的图。点上面的分组看每一类；“LS #…” 直接打开那个任务，改好提交后点“立即回收标注”，改好的会从这里消失。": [
+  "app.js"
  ],
  "在 Label Studio 提交或修改标注": [
   "app.js"
@@ -6097,6 +6888,9 @@
  ],
  "在其他类型里找和本类已确认照片最像的…": [
   "types.js"
+ ],
+ "在原图与分拣里选中后用": [
+  "flow.py"
  ],
  "在后台继续": [
   "models.js"
@@ -6188,11 +6982,17 @@
  "在某个版本上点": [
   "guide.js"
  ],
+ "在照片类型页顶部能看到": [
+  "flow.py"
+ ],
  "在节点模式里点一个节点": [
   "flow.html"
  ],
  "在节点模式里点一个节点，这里显示它是做什么的、每个参数怎么填。右键画布可以添加节点；拖动输出圆点连到同颜色的输入；": [
   "flow.html"
+ ],
+ "在萤石云视频 App 里能不能看到": [
+  "ezviz.py"
  ],
  "在要用的模型卡片上点": [
   "guide.js"
@@ -6244,6 +7044,12 @@
  "均衡（推荐）": [
   "models.js"
  ],
+ "坏图": [
+  "prefilter.js"
+ ],
+ "坏图、过暗过曝、太小太糊": [
+  "prefilter.js"
+ ],
  "域名": [
   "streams.js"
  ],
@@ -6256,6 +7062,9 @@
  "填 SigLIP2 模型目录时，按类别名零样本归类；留空就用已启用的照片分类器或上面的历史文件": [
   "flow.py"
  ],
+ "填了会自动关闭这台设备的": [
+  "streams.js"
+ ],
  "填了会进审核报告": [
   "m.js"
  ],
@@ -6267,6 +7076,9 @@
  ],
  "填了就覆盖上面的训练强度": [
   "models.js"
+ ],
+ "填图库代号": [
+  "flow.py"
  ],
  "填已注册模型的版本或别名": [
   "flow.py"
@@ -6318,6 +7130,12 @@
  ],
  "增强方法": [
   "flow.py"
+ ],
+ "增量": [
+  "prefilter.js"
+ ],
+ "增量更新": [
+  "prefilter.js"
  ],
  "处理": [
   "guide.js"
@@ -6520,6 +7338,9 @@
  "大小再决定": [
   "models.js"
  ],
+ "大小有问题": [
+  "app.js"
+ ],
  "大模型说明": [
   "agent.py"
  ],
@@ -6533,14 +7354,16 @@
   "vlmcheck.py"
  ],
  "大门": [
-  "app.js",
-  "types.js"
+  "app.js"
  ],
  "太小可能压缩过度": [
   "datasets.js"
  ],
  "太小可能压缩过度、看不清细节": [
   "datasets.js"
+ ],
+ "太小太糊": [
+  "prefilter.js"
  ],
  "太小等": [
   "flow.py"
@@ -6561,6 +7384,12 @@
  "太强会失真": [
   "flow.py"
  ],
+ "太模糊": [
+  "prefilter.py"
+ ],
+ "太模糊（{0}）": [
+  "prefilter.py"
+ ],
  "失败": [
   "app.js",
   "models.js",
@@ -6571,6 +7400,12 @@
  ],
  "失败：": [
   "toolbox.js"
+ ],
+ "如 /data/images/raw/downloads": [
+  "prefilter.js"
+ ],
+ "如 /data/images/精选/水果": [
+  "types.js"
  ],
  "如 /data/imports/<子项目>/videos/xxx.mp4（在工具箱上传后可复制路径）": [
   "flow.py"
@@ -6616,6 +7451,9 @@
  "如：Generator room": [
   "types.js"
  ],
+ "如：J12345678（机身标签上）": [
+  "streams.js"
+ ],
  "如：PCB 缺陷检测": [
   "overview.js"
  ],
@@ -6640,8 +7478,14 @@
  "如：旧版检测模型 yolov8s-old": [
   "models.js"
  ],
+ "如：水果分拣": [
+  "types.js"
+ ],
  "如：站内杂草检查": [
   "inspect.js"
+ ],
+ "如：苹果,Apple": [
+  "types.js"
  ],
  "姿态": [
   "datasets.js",
@@ -6696,6 +7540,7 @@
   "flow.html",
   "overview.js",
   "review.html",
+  "types.js",
   "ui.js"
  ],
  "子项目 {0}": [
@@ -6765,6 +7610,9 @@
  "子项目：{0}（{1}）": [
   "datasets.js"
  ],
+ "字母数字": [
+  "ezviz.py"
+ ],
  "学习率": [
   "flow.py",
   "models.js",
@@ -6805,10 +7653,10 @@
  "宇视": [
   "streams.py"
  ],
- "宇视会按规则自动拼地址": [
+ "宇视或任意 RTSP 摄像头": [
   "streams.js"
  ],
- "宇视或任意 RTSP 摄像头": [
+ "宇视按规则自动拼地址": [
   "streams.js"
  ],
  "安全监测": [
@@ -6984,6 +7832,24 @@
  "对应下面“训练轮数”的三档": [
   "settings.js"
  ],
+ "对应的账号": [
+  "streams.js"
+ ],
+ "对比度": [
+  "prefilter.js"
+ ],
+ "对比度 {0}": [
+  "prefilter.py"
+ ],
+ "对比度 {5}": [
+  "prefilter.js"
+ ],
+ "对比度 {8}": [
+  "prefilter.js"
+ ],
+ "对比度低于多少淘汰": [
+  "prefilter.js"
+ ],
  "对焦不准": [
   "media.py"
  ],
@@ -7062,7 +7928,8 @@
  ],
  "导出": [
   "hub.py",
-  "models.js"
+  "models.js",
+  "prefilter.js"
  ],
  "导出 CSV": [
   "report.js"
@@ -7089,8 +7956,17 @@
  "导出到手机：正式模型 → TFLite INT8": [
   "flow.py"
  ],
+ "导出到精选目录": [
+  "prefilter.js"
+ ],
+ "导出到精选目录（硬链接，原图不动）": [
+  "prefilter.js"
+ ],
  "导出后建议在手机上用几张真实照片核对一下": [
   "models.js"
+ ],
+ "导出哪几档": [
+  "prefilter.js"
  ],
  "导出完成": [
   "models.js"
@@ -7101,11 +7977,17 @@
  "导出尺寸": [
   "settings.js"
  ],
+ "导出新入选的…": [
+  "prefilter.py"
+ ],
  "导出模型": [
   "hub.py"
  ],
  "导出模型（手机 / 边缘设备）": [
   "hub.py"
+ ],
+ "导出的精选目录": [
+  "types.js"
  ],
  "导出都在后台跑": [
   "models.js"
@@ -7115,6 +7997,15 @@
  ],
  "导航": [
   "index.html"
+ ],
+ "将导出": [
+  "prefilter.js"
+ ],
+ "将导出 {0} 张": [
+  "prefilter.js"
+ ],
+ "将导出 {0} 张：新链 {1} 张，精选目录里已有 {2} 张（不重复）": [
+  "prefilter.js"
  ],
  "小于 20 像素": [
   "app.js"
@@ -7188,6 +8079,9 @@
  "就去补成绩差的类别或场景": [
   "flow.py"
  ],
+ "就建议归到对应的照片类型": [
+  "types.js"
+ ],
  "就报警截图": [
   "streams.js"
  ],
@@ -7202,6 +8096,9 @@
  ],
  "就能在这里评估": [
   "models.js"
+ ],
+ "就进来": [
+  "types.js"
  ],
  "尺寸": [
   "datasets.js",
@@ -7284,6 +8181,12 @@
  "工作流模板": [
   "settings.js"
  ],
+ "工作流里": [
+  "types.js"
+ ],
+ "工作流里“按照片类型抽图”等工具不填图库时用默认图库": [
+  "types.js"
+ ],
  "工作流里也有": [
   "guide.js"
  ],
@@ -7311,6 +8214,12 @@
  ],
  "工作流里用「导入医学影像（DICOM）」节点：选窗宽窗位（肺窗、纵隔窗、骨窗、脑窗、腹窗或自动），多帧取中间一帧或全部；不复制病人姓名等隐私字段。": [
   "guide.js"
+ ],
+ "工作流里的": [
+  "types.js"
+ ],
+ "工作流里的“按照片类型抽图”“按照片类型补类别”“用权重找图”“按权重给照片类型归类”不填“图库”时用默认图库。": [
+  "types.js"
  ],
  "工作流页点": [
   "guide.js"
@@ -7360,6 +8269,9 @@
  "左": [
   "labels.py"
  ],
+ "左侧类型后面的 💡 数字": [
+  "types.js"
+ ],
  "左右对称的目标用 0.5": [
   "settings.js"
  ],
@@ -7384,6 +8296,9 @@
  "已人工确认的": [
   "review.html"
  ],
+ "已从列表去掉": [
+  "types.js"
+ ],
  "已传 {0}": [
   "models.js"
  ],
@@ -7392,8 +8307,14 @@
   "streams.js",
   "workflow.js"
  ],
+ "已停止": [
+  "prefilter.py"
+ ],
  "已停止播放": [
   "streams.js"
+ ],
+ "已停止（下次接着扫）": [
+  "prefilter.py"
  ],
  "已停用": [
   "app.js"
@@ -7420,6 +8341,7 @@
   "app.js",
   "catalog.py",
   "cleanup.py",
+  "imagelib.py",
   "phototypes.py",
   "streams.js"
  ],
@@ -7434,6 +8356,9 @@
  ],
  "已删除，不再登记 / deleted": [
   "catalog.py"
+ ],
+ "已删除：文件已移到回收站{0}": [
+  "imagelib.py"
  ],
  "已加入": [
   "categories.js"
@@ -7540,10 +8465,14 @@
   "streams.js"
  ],
  "已导出": [
-  "models.js"
+  "models.js",
+  "prefilter.js"
  ],
  "已导出：": [
   "models.js"
+ ],
+ "已导出：硬链接 {0} 张{1}，已有 {2} 张{3}": [
+  "prefilter.js"
  ],
  "已开启": [
   "app.js"
@@ -7558,6 +8487,7 @@
   "types.js"
  ],
  "已恢复": [
+  "imagelib.py",
   "phototypes.py"
  ],
  "已恢复 {0} 张到原来的位置{1}{2}": [
@@ -7618,11 +8548,26 @@
  "已提交的": [
   "flow.py"
  ],
+ "已改名": [
+  "types.js"
+ ],
  "已改好": [
   "datasets.js"
  ],
  "已断开": [
   "streams.js"
+ ],
+ "已新增照片类型": [
+  "imagelib.py"
+ ],
+ "已新增照片类型：{0} / {1}（{2}）": [
+  "imagelib.py"
+ ],
+ "已新建图库": [
+  "types.js"
+ ],
+ "已新建图库“{0}”，开始建索引": [
+  "types.js"
  ],
  "已暂停": [
   "app.js"
@@ -7635,6 +8580,16 @@
  ],
  "已有 {0} 张标注，还没打包数据集": [
   "hub.py"
+ ],
+ "已有 {1} 张": [
+  "imagelib.py",
+  "prefilter.py"
+ ],
+ "已有 {2} 张": [
+  "prefilter.js"
+ ],
+ "已有 {2} 张{3}": [
+  "prefilter.js"
  ],
  "已有代码保持稳定": [
   "categories.js"
@@ -7684,6 +8639,12 @@
  "已生成模板，按需修改后点保存": [
   "settings.js"
  ],
+ "已用 {0} 秒": [
+  "types.js"
+ ],
+ "已用 {0} 秒；可以关掉这个窗口，扫完会提示": [
+  "types.js"
+ ],
  "已用 {3} 分钟": [
   "models.js"
  ],
@@ -7727,6 +8688,12 @@
  "已移除 {0} 张的类别": [
   "app.js"
  ],
+ "已索引": [
+  "types.js"
+ ],
+ "已索引 {0} 张": [
+  "types.js"
+ ],
  "已索引照片": [
   "types.js"
  ],
@@ -7736,8 +8703,20 @@
  "已经发布的数据集版本不受影响": [
   "app.js"
  ],
+ "已经导出的不会被删掉": [
+  "prefilter.js"
+ ],
+ "已经导出的精选目录都不动": [
+  "prefilter.js"
+ ],
  "已经有人标过的不动": [
   "flow.py"
+ ],
+ "已经有同名类型": [
+  "imagelib.py"
+ ],
+ "已经有同名类型：{0}": [
+  "imagelib.py"
  ],
  "已经有这个类别": [
   "app.js"
@@ -7769,6 +8748,9 @@
  "已设为「最新」。确认效果后可在卡片上点「设为正式使用」。": [
   "models.js"
  ],
+ "已设为默认图库": [
+  "types.js"
+ ],
  "已连接 Label Studio 项目 #": [
   "app.js"
  ],
@@ -7776,6 +8758,7 @@
   "app.js"
  ],
  "已选 {0}": [
+  "prefilter.js",
   "types.js"
  ],
  "已选中": [
@@ -7830,6 +8813,12 @@
  "常见异常": [
   "types.js"
  ],
+ "常见异常的中文 {0} 项": [
+  "imagelib.py"
+ ],
+ "常见异常的中文 {0} 项、英文 {1} 项，数量要一一对应": [
+  "imagelib.py"
+ ],
  "常见异常（中文）": [
   "types.js"
  ],
@@ -7866,6 +8855,12 @@
  "平均交并比 mIoU {1}": [
   "models.js"
  ],
+ "平均亮度低于多少算过暗": [
+  "prefilter.js"
+ ],
+ "平均亮度高于多少算过曝": [
+  "prefilter.js"
+ ],
  "平均占图片 {0}%": [
   "datasets.js"
  ],
@@ -7891,7 +8886,8 @@
   "settings.js"
  ],
  "并以字母开头": [
-  "flow.js"
+  "flow.js",
+  "imagelib.py"
  ],
  "并允许它读取复制进来的原图": [
   "flow.py"
@@ -7901,6 +8897,9 @@
  ],
  "并在": [
   "streams.js"
+ ],
+ "并把新入选的接着导出到上次的精选目录": [
+  "prefilter.js"
  ],
  "并把连接存进场景配置": [
   "app.js"
@@ -7914,6 +8913,12 @@
  "并记入质检记录": [
   "flow.py"
  ],
+ "序列号不合法": [
+  "ezviz.py"
+ ],
+ "应用": [
+  "prefilter.js"
+ ],
  "应该一版比一版高": [
   "guide.js"
  ],
@@ -7922,6 +8927,15 @@
  ],
  "底座权重": [
   "models.js"
+ ],
+ "延迟 2–10 秒": [
+  "streams.js"
+ ],
+ "延迟低": [
+  "streams.js"
+ ],
+ "延迟高": [
+  "streams.js"
  ],
  "建 Label Studio 视频标注项目": [
   "media.py"
@@ -7935,6 +8949,18 @@
  "建好后不要改顺序": [
   "settings.js"
  ],
+ "建好后会自动": [
+  "types.js"
+ ],
+ "建好后点": [
+  "prefilter.js"
+ ],
+ "建好并开始扫描": [
+  "prefilter.js"
+ ],
+ "建索引中…": [
+  "types.js"
+ ],
  "建视频标注项目": [
   "flow.py",
   "guide.js",
@@ -7942,6 +8968,12 @@
  ],
  "建议**不算人工确认**": [
   "flow.py"
+ ],
+ "建议不算人工确认": [
+  "types.js"
+ ],
+ "建议不算人工确认，要到该类型的「💡 权重建议」里看图，整批确认或忽略；确认后成为样板，再点“重新训练并归类全部”，分类器就更准。人工确认过类型的照片不扫、不改。": [
+  "types.js"
  ],
  "建议同时": [
   "overview.js"
@@ -8023,11 +9055,30 @@
   "flow.py",
   "guide.js"
  ],
+ "开始增量更新": [
+  "prefilter.js"
+ ],
+ "开始增量更新：扫描新照片，扫完把新入选的导出到精选目录": [
+  "prefilter.js"
+ ],
  "开始对比": [
   "models.js"
  ],
  "开始导出": [
   "models.js"
+ ],
+ "开始建索引": [
+  "types.js"
+ ],
+ "开始打分": [
+  "prefilter.js"
+ ],
+ "开始扫描": [
+  "prefilter.js",
+  "types.js"
+ ],
+ "开始扫描（只处理新增或改过的文件）": [
+  "prefilter.js"
  ],
  "开始抽帧": [
   "toolbox.js"
@@ -8040,6 +9091,12 @@
  ],
  "开始时先把 {0} 张已复核的标注打包成新版本（验证 {1}%、测试 {2}%），再用它训练。": [
   "models.js"
+ ],
+ "开始更新索引": [
+  "types.js"
+ ],
+ "开始更新索引：只给新照片算特征": [
+  "types.js"
  ],
  "开始检查": [
   "datasets.js"
@@ -8149,9 +9206,6 @@
  "张照片": [
   "app.js"
  ],
- "张（类别名对不上、没选 Targets reviewed 等）。": [
-  "app.js"
- ],
  "张）": [
   "app.js"
  ],
@@ -8176,9 +9230,6 @@
  "张：": [
   "app.js"
  ],
- "张：没检查过新类别，暂时不能进数据集。": [
-  "app.js"
- ],
  "张：请先“清空”再分批选。": [
   "app.js"
  ],
@@ -8197,6 +9248,12 @@
  "归到哪个照片类型": [
   "typesuggest.py"
  ],
+ "归到照片类型": [
+  "types.js"
+ ],
+ "归到照片类型：": [
+  "types.js"
+ ],
  "归到这类": [
   "flow.py"
  ],
@@ -8212,8 +9269,12 @@
  "归类的输入": [
   "flow.py"
  ],
+ "归类结果": [
+  "types.js"
+ ],
  "归类规则": [
-  "flow.py"
+  "flow.py",
+  "types.js"
  ],
  "归组重复图": [
   "flow.py"
@@ -8351,6 +9412,21 @@
  "必须是 Ultralytics 模型，任务类型 = {0}，类别 = {1}（顺序也要一致）": [
   "models.js"
  ],
+ "忘掉之前扫过的记录": [
+  "types.js"
+ ],
+ "忘掉之前扫过的记录，全部重扫": [
+  "types.js"
+ ],
+ "快捷键 A": [
+  "prefilter.js"
+ ],
+ "快捷键 D": [
+  "prefilter.js"
+ ],
+ "快捷键 K": [
+  "prefilter.js"
+ ],
  "快照": [
   "datasets.js"
  ],
@@ -8401,16 +9477,26 @@
  "恢复所选图片为待复核": [
   "app.js"
  ],
+ "恢复按分数": [
+  "prefilter.js"
+ ],
  "恢复按比例随机分": [
   "flow.py"
  ],
+ "恢复时两处都回来": [
+  "types.js"
+ ],
  "恢复时还原": [
   "types.js"
+ ],
+ "恢复自动判断": [
+  "prefilter.js"
  ],
  "恢复这张": [
   "types.js"
  ],
  "恢复默认": [
+  "prefilter.js",
   "settings.js"
  ],
  "恢复默认设置": [
@@ -8478,6 +9564,10 @@
  "我想做什么": [
   "guide.js"
  ],
+ "我的应用": [
+  "ezviz.py",
+  "streams.js"
+ ],
  "我确认要删除": [
   "app.js"
  ],
@@ -8508,7 +9598,14 @@
  "或上一步没有这个输出": [
   "engine.py"
  ],
+ "或先在本页": [
+  "flow.py"
+ ],
+ "或删掉这个框": [
+  "flow.py"
+ ],
  "或在": [
+  "flow.py",
   "models.js",
   "toolbox.js"
  ],
@@ -8542,6 +9639,9 @@
  "或把图片尺寸调小": [
   "guide.js"
  ],
+ "或把对的那份设为 Ground Truth": [
+  "flow.py"
+ ],
  "或把间隔调长": [
   "models.js"
  ],
@@ -8553,6 +9653,9 @@
  ],
  "或整批确认过的标注": [
   "models.js"
+ ],
+ "或新建一个": [
+  "prefilter.js"
  ],
  "或旧项目没有 Targets reviewed 选项时用": [
   "flow.py"
@@ -8592,6 +9695,9 @@
  "或画了旋转框": [
   "guide.js"
  ],
+ "或画大一点": [
+  "flow.py"
+ ],
  "或空白子项目": [
   "overview.js"
  ],
@@ -8612,6 +9718,9 @@
  ],
  "或者用一个现成的 YOLO 权重文件（检测、分类都行）": [
   "flow.py"
+ ],
+ "或要重新确认": [
+  "app.js"
  ],
  "或质检前预处理": [
   "guide.js",
@@ -8676,6 +9785,9 @@
  ],
  "所有页面不再出现": [
   "types.js"
+ ],
+ "所选": [
+  "app.js"
  ],
  "手指遮挡": [
   "vlmcheck.py"
@@ -8753,6 +9865,9 @@
  ],
  "打乱用的随机种子": [
   "flow.py"
+ ],
+ "打分": [
+  "prefilter.js"
  ],
  "打包": [
   "guide.js"
@@ -8837,8 +9952,20 @@
   "app.js",
   "guide.js"
  ],
+ "打开 Label Studio 任务看一下": [
+  "flow.py"
+ ],
+ "打开 Label Studio 任务看一下，改好后重新提交。": [
+  "flow.py"
+ ],
  "打开 →": [
   "overview.js"
+ ],
+ "打开任务": [
+  "flow.py"
+ ],
+ "打开任务，确认框都画全了，选 Targets reviewed 再提交。": [
+  "flow.py"
  ],
  "打开图片就有框": [
   "flow.py"
@@ -8847,7 +9974,6 @@
   "flow.js"
  ],
  "打开就有框": [
-  "app.js",
   "flow.py"
  ],
  "打开工作流": [
@@ -8890,6 +10016,33 @@
  "扫了 {0} 张，找到 {1} 张（累计扫 {2}/{3}，还剩 {4}）": [
   "flow.js"
  ],
+ "扫完 {0} 张": [
+  "types.js"
+ ],
+ "扫完 {0} 张，给出 {1} 条建议": [
+  "types.js"
+ ],
+ "扫完会提示": [
+  "types.js"
+ ],
+ "扫完把新入选的导出到精选目录": [
+  "prefilter.js"
+ ],
+ "扫描": [
+  "prefilter.js"
+ ],
+ "扫描 + 导出": [
+  "prefilter.js"
+ ],
+ "扫描中": [
+  "prefilter.js"
+ ],
+ "扫描中…": [
+  "types.js"
+ ],
+ "扫描于 {1}": [
+  "prefilter.js"
+ ],
  "扫描原图": [
   "app.js",
   "flow.py",
@@ -8897,13 +10050,29 @@
  ],
  "扫描完成": [
   "flow.js",
-  "flow.py"
+  "flow.py",
+  "prefilter.py"
+ ],
+ "扫描完成：{0} 张，本次打分 {1} 张，用时 {2} 秒": [
+  "prefilter.py"
+ ],
+ "扫描新增照片": [
+  "prefilter.js"
+ ],
+ "扫描新增照片，并把新入选的接着导出到上次的精选目录：": [
+  "prefilter.js"
+ ],
+ "扫描新照片": [
+  "prefilter.js"
  ],
  "扫描服务器上的一个文件夹": [
   "flow.py"
  ],
  "扫描服务器上的一个文件夹，按图片内容去重后**复制**进当前子项目（原文件不动）。一次最多 1000 张。": [
   "flow.py"
+ ],
+ "扫描范围": [
+  "types.js"
  ],
  "扫描顺序": [
   "flow.py"
@@ -8968,7 +10137,8 @@
   "guide.js"
  ],
  "找不到这张图": [
-  "phototypes.py"
+  "imagelib.py",
+  "prefilter.py"
  ],
  "找什么目标": [
   "flow.py",
@@ -8976,6 +10146,9 @@
  ],
  "找出物体在哪": [
   "app.js"
+ ],
+ "找出重复和几乎一样的照片": [
+  "prefilter.js"
  ],
  "找到 {0} 个目标": [
   "models.js"
@@ -9177,6 +10350,9 @@
  "把握分数低于它的框不算": [
   "flow.py"
  ],
+ "把斜框改成刚好包住它的水平框": [
+  "app.js"
+ ],
  "把最新的标注打包成新数据集": [
   "models.js"
  ],
@@ -9187,6 +10363,12 @@
   "flow.py"
  ],
  "把某一版数据集的**测试集固定下来当考试集**：以后每次打包，这些图（连同同站点的图，防止泄题）都放进测试集，其余新图只分训练 / 验证。这样 r1、r2、r3… 每一版的测试集核心不变，模型成绩才能直接比。勾“取消固定”恢复按比例随机分。": [
+  "flow.py"
+ ],
+ "把框拖回图片内": [
+  "flow.py"
+ ],
+ "把框拖回图片内，或删掉这个框。": [
   "flow.py"
  ],
  "把模型导出成手机": [
@@ -9347,6 +10529,12 @@
  "抽进来的图": [
   "flow.py"
  ],
+ "拉普拉斯方差": [
+  "prefilter.js"
+ ],
+ "拉普拉斯方差，越大越清晰": [
+  "prefilter.js"
+ ],
  "拍照即检": [
   "m.html"
  ],
@@ -9402,6 +10590,10 @@
  ],
  "拼图增强": [
   "settings.js"
+ ],
+ "拿不准": [
+  "app.js",
+  "flow.py"
  ],
  "拿不准的 + 有把握的": [
   "guide.js"
@@ -9520,11 +10712,18 @@
  "按感知哈希把几乎一样的照片（同一场景连拍、重复上传）归成一组，方便复核时只看一张。**不删除**。": [
   "flow.py"
  ],
+ "按文件名": [
+  "prefilter.js"
+ ],
  "按显存挑": [
   "models.js"
  ],
  "按权重给照片类型归类": [
-  "flow.py"
+  "flow.py",
+  "types.js"
+ ],
+ "按档看图": [
+  "prefilter.js"
  ],
  "按检测": [
   "flow.py"
@@ -9543,7 +10742,8 @@
  "按照片类型补类别": [
   "app.js",
   "flow.py",
-  "guide.js"
+  "guide.js",
+  "types.js"
  ],
  "按现在的类别新建 Label Studio 项目": [
   "app.js",
@@ -9618,6 +10818,9 @@
   "app.js",
   "flow.py"
  ],
+ "损坏或不支持的格式": [
+  "prefilter.py"
+ ],
  "换一个": [
   "learning.py",
   "models.js",
@@ -9649,6 +10852,9 @@
  ],
  "排队": [
   "models.js"
+ ],
+ "排队中…": [
+  "types.js"
  ],
  "排除": [
   "cleanup.py",
@@ -9700,7 +10906,8 @@
   "toolbox.js"
  ],
  "接地": [
-  "flow.py"
+  "flow.py",
+  "types.js"
  ],
  "接地线缺失": [
   "vlmcheck.py"
@@ -9858,6 +11065,18 @@
  "搜索节点名…": [
   "flow.js"
  ],
+ "摄像头和服务器不在同一个网络时用": [
+  "streams.js"
+ ],
+ "摄像头和服务器不在同一个网络时用：服务器经萤石云拉画面（延迟 2–10 秒，占萤石账号的流量额度）。先用“萤石云视频”App 把设备添加到萤石开放平台（open.ys7.com）对应的账号，再到“我的应用”里拿 AppKey 和 AppSecret。": [
+  "streams.js"
+ ],
+ "摄像头填 1": [
+  "streams.js"
+ ],
+ "摄像头填 1；录像机填第几路": [
+  "streams.js"
+ ],
  "摄像头编号 {0} 已存在": [
   "streams.py"
  ],
@@ -9872,6 +11091,12 @@
  ],
  "摔倒": [
   "templates.js"
+ ],
+ "撤销人工改判": [
+  "prefilter.js"
+ ],
+ "撤销人工改判，回到按分数自动判断（快捷键 A）": [
+  "prefilter.js"
  ],
  "撤销排除": [
   "app.js"
@@ -9913,6 +11138,12 @@
  "支持空格分隔多个词": [
   "combo.js"
  ],
+ "收不进来的标注": [
+  "app.js"
+ ],
+ "收不进来的标注：": [
+  "app.js"
+ ],
  "收图": [
   "guide.js"
  ],
@@ -9927,6 +11158,33 @@
  ],
  "收起右侧栏，给画布更多空间": [
   "flow.html"
+ ],
+ "改了立刻重新分档": [
+  "prefilter.js"
+ ],
+ "改判": [
+  "prefilter.js"
+ ],
+ "改判为": [
+  "prefilter.js"
+ ],
+ "改判为“不要”": [
+  "prefilter.js"
+ ],
+ "改判为“要”": [
+  "prefilter.js"
+ ],
+ "改名": [
+  "types.js"
+ ],
+ "改好后重新提交": [
+  "flow.py"
+ ],
+ "改好提交后点": [
+  "app.js"
+ ],
+ "改好的会从这里消失": [
+  "app.js"
  ],
  "改完回收": [
   "guide.js"
@@ -9943,11 +11201,16 @@
  "改成": [
   "flow.py"
  ],
+ "改成水平框并重新回收": [
+  "flow.py"
+ ],
+ "改成现有类别": [
+  "flow.py"
+ ],
  "改选验证集": [
   "models.js"
  ],
  "改错框": [
-  "app.js",
   "flow.py"
  ],
  "放到同一目录": [
@@ -9985,6 +11248,7 @@
   "categories.js",
   "flow.js",
   "hub.py",
+  "imagelib.py",
   "models.js",
   "overview.js",
   "streams.js",
@@ -10081,9 +11345,6 @@
  "数据很少、现场光照角度变化大": [
   "settings.js"
  ],
- "数据目录下的 _deleted": [
-  "types.js"
- ],
  "数据集": [
   "app.js",
   "datasets.html",
@@ -10165,6 +11426,9 @@
  "数量大时分几次扫": [
   "flow.py"
  ],
+ "数量要一一对应": [
+  "imagelib.py"
+ ],
  "整体偏黄": [
   "media.py"
  ],
@@ -10218,7 +11482,8 @@
   "guide.js"
  ],
  "整批确认或忽略": [
-  "flow.py"
+  "flow.py",
+  "types.js"
  ],
  "整批确认等于不看就认可": [
   "flow.py"
@@ -10235,6 +11500,12 @@
  "文件": [
   "agent.py"
  ],
+ "文件不存在": [
+  "imagelib.py"
+ ],
+ "文件不存在（可能已删除）：{0}": [
+  "imagelib.py"
+ ],
  "文件出现在": [
   "flow.py"
  ],
@@ -10246,6 +11517,12 @@
  ],
  "文件大小": [
   "datasets.js"
+ ],
+ "文件太小": [
+  "prefilter.py"
+ ],
+ "文件太小（{0}B）": [
+  "prefilter.py"
  ],
  "文件夹": [
   "flow.py",
@@ -10268,6 +11545,9 @@
  ],
  "文件夹）：": [
   "models.js"
+ ],
+ "文件已移到回收站{0}": [
+  "imagelib.py"
  ],
  "文件最后修改后要过这么久才登记": [
   "flow.py"
@@ -10296,6 +11576,28 @@
  "料箱物体识别": [
   "templates.js"
  ],
+ "斜": [
+  "app.js"
+ ],
+ "斜框转正": [
+  "app.js",
+  "flow.py"
+ ],
+ "斜框转正只用于检测": [
+  "flow.py"
+ ],
+ "斜框转正只用于检测（正框）任务；旋转框任务（obb）本来就收斜框": [
+  "flow.py"
+ ],
+ "斜框转正（": [
+  "app.js"
+ ],
+ "斜框转正（改成水平框并重新回收）": [
+  "flow.py"
+ ],
+ "斜框转正：把斜框改成刚好包住它的水平框（直接改 Label Studio 里的标注，然后自动回收）。角度大于 45° 的不自动转，请在 Label Studio 里重画。": [
+  "app.js"
+ ],
  "断点续扫": [
   "flow.py"
  ],
@@ -10311,6 +11613,12 @@
  "新增类别": [
   "categories.js"
  ],
+ "新导出的照片点": [
+  "types.js"
+ ],
+ "新建": [
+  "types.js"
+ ],
  "新建 Label Studio 项目": [
   "app.js"
  ],
@@ -10323,9 +11631,21 @@
  "新建任务": [
   "tasks-ui.js"
  ],
+ "新建初选": [
+  "prefilter.js"
+ ],
+ "新建图库": [
+  "types.js"
+ ],
  "新建场景": [
   "app.js",
   "index.html"
+ ],
+ "新建子目录名": [
+  "prefilter.js"
+ ],
+ "新建子目录名（可不填）": [
+  "prefilter.js"
  ],
  "新建子项目": [
   "overview.js"
@@ -10367,14 +11687,17 @@
  "新类别只加在末尾": [
   "app.js"
  ],
- "新类型会和 44 个标准类型一起出现在左侧": [
-  "types.js"
- ],
  "新老版本可比": [
   "settings.js"
  ],
  "新训练的": [
   "models.js"
+ ],
+ "新链 {1} 张": [
+  "prefilter.js"
+ ],
+ "新链入精选目录 {0} 张": [
+  "prefilter.py"
  ],
  "方便复核时只看一张": [
   "flow.py"
@@ -10396,6 +11719,9 @@
  "旋转框 = 框 + 角度": [
   "overview.js"
  ],
+ "旋转框任务": [
+  "flow.py"
+ ],
  "旋转框（框 + 角度）": [
   "templates.js"
  ],
@@ -10408,6 +11734,9 @@
  "旋转角度（度）": [
   "settings.js"
  ],
+ "旋转过": [
+  "flow.py"
+ ],
  "无": [
   "app.js"
  ],
@@ -10416,10 +11745,15 @@
  ],
  "无关": [
   "flow.py",
+  "imagelib.py",
+  "types.js",
   "typesuggest.py"
  ],
  "无关或没有类型": [
   "flow.py"
+ ],
+ "无法恢复": [
+  "imagelib.py"
  ],
  "无法显示图片": [
   "app.js"
@@ -10448,6 +11782,9 @@
  ],
  "旧图里有新目标却没框": [
   "app.js"
+ ],
+ "旧数据": [
+  "imagelib.py"
  ],
  "旧标注没检查过新类别": [
   "guide.js"
@@ -10488,6 +11825,9 @@
  ],
  "时用 960 或 1280": [
   "settings.js"
+ ],
+ "时用默认图库": [
+  "types.js"
  ],
  "时调大": [
   "settings.js"
@@ -10533,8 +11873,15 @@
  "显卡 0": [
   "settings.js"
  ],
+ "显卡上大约每分钟几千张": [
+  "types.js"
+ ],
+ "显卡上大约每分钟几千张；可以关掉这个窗口，扫完会提示": [
+  "types.js"
+ ],
  "显卡上约每分钟几千张": [
-  "flow.py"
+  "flow.py",
+  "types.js"
  ],
  "显存 8G": [
   "flow.py",
@@ -10622,9 +11969,6 @@
  "暂无中文说明": [
   "flow.py"
  ],
- "暂时不能进数据集": [
-  "app.js"
- ],
  "暗光": [
   "flow.py",
   "toolbox.js"
@@ -10638,6 +11982,9 @@
  "暗光增强": [
   "guide.js",
   "media.py"
+ ],
+ "曝光": [
+  "prefilter.js"
  ],
  "更准": [
   "flow.py"
@@ -10654,6 +12001,16 @@
  ],
  "更慢": [
   "flow.py"
+ ],
+ "更新索引": [
+  "imagelib.py",
+  "types.js"
+ ],
+ "更新索引失败": [
+  "types.js"
+ ],
+ "更新索引失败：": [
+  "types.js"
  ],
  "替换现在的": [
   "flow.py"
@@ -10672,7 +12029,8 @@
   "app.js",
   "flow.py",
   "models.js",
-  "settings.js"
+  "settings.js",
+  "types.js"
  ],
  "最公平": [
   "models.js"
@@ -10695,6 +12053,9 @@
  ],
  "最多 120 帧": [
   "models.js"
+ ],
+ "最多 30 秒": [
+  "streams.js"
  ],
  "最多 300 帧": [
   "models.js"
@@ -10840,9 +12201,6 @@
  "有 {3} 个": [
   "datasets.js"
  ],
- "有了新类别的模型后": [
-  "app.js"
- ],
  "有就从它继续训": [
   "flow.py"
  ],
@@ -10880,6 +12238,12 @@
   "flow.py",
   "guide.js",
   "hub.py"
+ ],
+ "有目标就改选 Targets reviewed": [
+  "flow.py"
+ ],
+ "有目标就改选 Targets reviewed；没有目标就删掉框。": [
+  "flow.py"
  ],
  "有目标的帧": [
   "models.js"
@@ -10942,11 +12306,17 @@
  "服务器权重目录里没有 .pt": [
   "workflow.js"
  ],
+ "服务器经萤石云拉画面": [
+  "streams.js"
+ ],
  "服务器绝对路径": [
   "app.js"
  ],
  "服务器能不能 ping 到摄像头": [
   "streams.py"
+ ],
+ "服务器要能连到摄像头": [
+  "streams.js"
  ],
  "服务器路径": [
   "developers.js",
@@ -10971,6 +12341,9 @@
   "app.js",
   "streams.js"
  ],
+ "未恢复": [
+  "imagelib.py"
+ ],
  "未排除的": [
   "app.js"
  ],
@@ -10987,6 +12360,9 @@
   "agent.py",
   "report.js"
  ],
+ "未知错误": [
+  "ezviz.py"
+ ],
  "未评估": [
   "models.js"
  ],
@@ -11002,6 +12378,9 @@
  ],
  "末页": [
   "app.js"
+ ],
+ "本图库删除的照片先放在这里": [
+  "types.js"
  ],
  "本地图片服务根目录": [
   "tasks-ui.js"
@@ -11057,11 +12436,21 @@
  "本子项目已经人工确认过的图不动": [
   "flow.py"
  ],
+ "本来就收斜框": [
+  "flow.py"
+ ],
+ "本次打分 {1} 张": [
+  "prefilter.py"
+ ],
  "本次扫描张数": [
   "flow.py"
  ],
+ "本次新增 {1} 张": [
+  "imagelib.py"
+ ],
  "本次最多扫多少张": [
-  "flow.py"
+  "flow.py",
+  "types.js"
  ],
  "本次最多检查几个新文件": [
   "flow.py"
@@ -11089,6 +12478,18 @@
  ],
  "机械臂按角度抓取": [
   "templates.js"
+ ],
+ "机身标签上": [
+  "streams.js"
+ ],
+ "机身标签上 9 位左右的字母数字": [
+  "ezviz.py"
+ ],
+ "机身标签或 App 设备信息里": [
+  "streams.js"
+ ],
+ "机身标签或萤石云视频 App 设备信息里": [
+  "ezviz.py"
  ],
  "杂乱": [
   "templates.js"
@@ -11322,6 +12723,9 @@
   "app.js",
   "flow.py"
  ],
+ "标注不一致": [
+  "app.js"
+ ],
  "标注不一致是模型分数上不去的头号原因": [
   "guide.js"
  ],
@@ -11352,6 +12756,12 @@
  "标注员打开任务前先看到": [
   "app.js"
  ],
+ "标注员选了 Unsure": [
+  "flow.py"
+ ],
+ "标注员选了 Unsure（拿不准）": [
+  "flow.py"
+ ],
  "标注在 Label Studio 里做完后": [
   "datasets.js"
  ],
@@ -11362,6 +12772,9 @@
   "settings.js"
  ],
  "标注时只画一个类别 mcb": [
+  "flow.py"
+ ],
+ "标注时的图片尺寸和原图对不上": [
   "flow.py"
  ],
  "标注时还没有的类别": [
@@ -11503,6 +12916,12 @@
  "样板 {0} 张": [
   "types.js"
  ],
+ "样板太少": [
+  "imagelib.py"
+ ],
+ "样板太少：现在人工确认了 {0} 张。至少确认 20 张、分属 2 个以上类型再训练": [
+  "imagelib.py"
+ ],
  "样板越多越准": [
   "types.js"
  ],
@@ -11540,6 +12959,9 @@
  "框出破损处。": [
   "templates.js"
  ],
+ "框太小了": [
+  "flow.py"
+ ],
  "框完了": [
   "guide.js"
  ],
@@ -11555,11 +12977,22 @@
  "框数": [
   "app.js"
  ],
+ "框是斜的": [
+  "app.js",
+  "flow.py"
+ ],
+ "框是斜的（旋转过）": [
+  "flow.py"
+ ],
  "框歪了": [
   "app.js"
  ],
  "框的位置": [
+  "app.js",
   "hub.py"
+ ],
+ "框的位置/大小有问题": [
+  "app.js"
  ],
  "框的宽": [
   "datasets.js"
@@ -11576,6 +13009,9 @@
  "框的方向跟着目标走": [
   "hub.py"
  ],
+ "框的类别名对不上": [
+  "flow.py"
+ ],
  "框的置信度下限": [
   "flow.py"
  ],
@@ -11588,11 +13024,20 @@
  "框要贴着目标的可见边缘": [
   "hub.py"
  ],
+ "框超出图片或面积为 0": [
+  "flow.py"
+ ],
  "框都画完了": [
   "datasets.js"
  ],
  "框高": [
   "datasets.js"
+ ],
+ "档分数线": [
+  "prefilter.js"
+ ],
+ "档分数线不能高于": [
+  "prefilter.py"
  ],
  "检出 {0} 个目标": [
   "streams.js"
@@ -11621,6 +13066,12 @@
  "检查失败：": [
   "m.js"
  ],
+ "检查序列号": [
+  "ezviz.py"
+ ],
+ "检查摄像头电源和网络": [
+  "ezviz.py"
+ ],
  "检查标注是否一致": [
   "models.js"
  ],
@@ -11643,12 +13094,16 @@
  "检查网络是否通": [
   "streams.py"
  ],
+ "检查萤石开放平台": [
+  "ezviz.py"
+ ],
  "检测": [
   "datasets.js",
   "flow.py",
   "models.js",
   "qa.py",
   "tasks-ui.js",
+  "types.js",
   "workflow.js"
  ],
  "检测 = 画框找位置": [
@@ -11697,6 +13152,7 @@
   "inspect.js",
   "models.js",
   "overview.js",
+  "types.js",
   "ui.js",
   "workflow.js"
  ],
@@ -11923,6 +13379,9 @@
  "模型自信地错的图永远挑不到": [
   "app.js"
  ],
+ "模型认出这些类别": [
+  "types.js"
+ ],
  "模型训练类别和已有分拣照片的类别只能停用": [
   "categories.js"
  ],
@@ -11997,11 +13456,20 @@
  "正在使用哪个": [
   "models.js"
  ],
+ "正在停止…": [
+  "prefilter.js"
+ ],
  "正在加载…": [
   "app.js"
  ],
  "正在加载原图…": [
   "app.js"
+ ],
+ "正在扫描": [
+  "prefilter.py"
+ ],
+ "正在扫描，先停止": [
+  "prefilter.py"
  ],
  "正在登记进图库…": [
   "streams.js"
@@ -12046,6 +13514,15 @@
  ],
  "正样本偏少": [
   "datasets.js"
+ ],
+ "正框": [
+  "flow.py"
+ ],
+ "正框模型收不了斜框": [
+  "flow.py"
+ ],
+ "正框模型收不了斜框：在 Label Studio 把框的 Rotation 改成 0 或重画一个水平框；也可以在这里点“斜框转正”。": [
+  "flow.py"
  ],
  "正确答案在前 5 个候选里的比例": [
   "models.js"
@@ -12265,9 +13742,16 @@
  "每类至少 5 张": [
   "app.js"
  ],
+ "每组只留分最高的": [
+  "prefilter.js"
+ ],
  "每行一个": [
   "overview.js",
-  "tasks-ui.js"
+  "tasks-ui.js",
+  "types.js"
+ ],
+ "每行一个“中文名,英文名”；“其他/无关”（临时仓库）会自动有": [
+  "types.js"
  ],
  "每轮在": [
   "guide.js"
@@ -12311,6 +13795,9 @@
  "比例在项目设置里统一改（现在：验证 {0}%、测试 {1}%）。同一站点/重复照片只会分到同一部分，避免“考题泄露”。": [
   "datasets.js"
  ],
+ "比如": [
+  "types.js"
+ ],
  "比如 grounding_bar": [
   "flow.py"
  ],
@@ -12321,7 +13808,11 @@
   "models.py"
  ],
  "比如只扫": [
-  "flow.py"
+  "flow.py",
+  "types.js"
+ ],
+ "比如只扫“其他/无关”，给临时仓库里的照片找归宿": [
+  "types.js"
  ],
  "比如已有的杂草模型": [
   "flow.py"
@@ -12337,6 +13828,9 @@
  ],
  "比如杂草框整片还是分块": [
   "datasets.js"
+ ],
+ "比如：grounding_bar → 接地/防雷；一张图中了多条规则，取把握最大的那条": [
+  "types.js"
  ],
  "比最新数据集多 {0} 张": [
   "models.js"
@@ -12362,6 +13856,16 @@
  "毛刺": [
   "templates.js"
  ],
+ "水果": [
+  "types.js"
+ ],
+ "水果分拣": [
+  "imagelib.py",
+  "types.js"
+ ],
+ "水果分拣……各建一个": [
+  "types.js"
+ ],
  "永久删除": [
   "types.js"
  ],
@@ -12372,6 +13876,12 @@
   "types.js"
  ],
  "永久删除不能恢复，请确认": [
+  "types.js"
+ ],
+ "永久删除后磁盘空间也不会释放": [
+  "imagelib.py"
+ ],
+ "永久删除后磁盘空间才真正释放": [
   "types.js"
  ],
  "永久删除所选": [
@@ -12394,7 +13904,8 @@
   "flow.py"
  ],
  "没扫完的下次接着扫": [
-  "flow.py"
+  "flow.py",
+  "types.js"
  ],
  "没扫完的下次运行接着扫": [
   "flow.py"
@@ -12457,6 +13968,9 @@
  "没有图片输入": [
   "workflow.js"
  ],
+ "没有子目录": [
+  "prefilter.js"
+ ],
  "没有已复核的标注可以打包": [
   "labels.py"
  ],
@@ -12508,6 +14022,12 @@
   "guide.js",
   "hub.py"
  ],
+ "没有目标就删掉框": [
+  "flow.py"
+ ],
+ "没有目标就选 No target": [
+  "flow.py"
+ ],
  "没有空开的图选 No target": [
   "flow.py"
  ],
@@ -12545,6 +14065,18 @@
  "没有这个上传（可能已过期，请重新上传）": [
   "hub.py"
  ],
+ "没有这个初选任务": [
+  "prefilter.py"
+ ],
+ "没有这个初选任务：{0}": [
+  "prefilter.py"
+ ],
+ "没有这个图库": [
+  "imagelib.py"
+ ],
+ "没有这个图库：{0}": [
+  "imagelib.py"
+ ],
  "没有这个摄像头": [
   "streams.py"
  ],
@@ -12578,7 +14110,7 @@
   "flow.py"
  ],
  "没检查过新类别": [
-  "app.js"
+  "flow.py"
  ],
  "没法对上": [
   "app.js"
@@ -12592,8 +14124,14 @@
  "没法用这个数据集考它": [
   "models.py"
  ],
+ "没法转正": [
+  "flow.py"
+ ],
  "没用过的类别可以删除": [
   "categories.js"
+ ],
+ "没画框也没选 No target": [
+  "flow.py"
  ],
  "没连线时用": [
   "flow.py"
@@ -12604,13 +14142,19 @@
  "没选 Targets reviewed": [
   "flow.py"
  ],
- "没选 Targets reviewed 等": [
-  "app.js"
- ],
  "没选权重类别": [
   "typesuggest.py"
  ],
+ "没选确认选项": [
+  "app.js"
+ ],
  "油箱": [
+  "types.js"
+ ],
+ "沿用原来的图片分拣脚本": [
+  "prefilter.js"
+ ],
+ "沿用旧流水线数据": [
   "types.js"
  ],
  "注册模型": [
@@ -12631,6 +14175,12 @@
  ],
  "流式质检": [
   "developers.js"
+ ],
+ "流畅": [
+  "streams.js"
+ ],
+ "流畅（省流量，推荐）": [
+  "streams.js"
  ],
  "测试": [
   "datasets.js",
@@ -12672,6 +14222,9 @@
  "测试集（推荐，最公平）": [
   "models.js"
  ],
+ "浏览…": [
+  "prefilter.js"
+ ],
  "浏览器播放不了这个格式": [
   "models.js"
  ],
@@ -12679,13 +14232,20 @@
   "settings.js"
  ],
  "海康": [
-  "streams.js"
+  "streams.js",
+  "streams.py"
  ],
- "海康、大华、宇视会按规则自动拼地址": [
+ "海康·萤石云（不在同一网络时）": [
+  "streams.py"
+ ],
+ "海康、大华、宇视按规则自动拼地址（服务器要能连到摄像头）；不在同一个网络的海康摄像头选“萤石云”": [
   "streams.js"
  ],
  "海康威视": [
   "streams.py"
+ ],
+ "淘汰": [
+  "prefilter.js"
  ],
  "混合": [
   "settings.js"
@@ -12717,6 +14277,7 @@
  ],
  "添加类别": [
   "app.js",
+  "flow.py",
   "guide.js"
  ],
  "添加路由": [
@@ -12728,14 +14289,22 @@
  "清单里没有合适的类型时新增（中英双语）": [
   "types.js"
  ],
- "清单里没有合适的类型时用": [
-  "types.js"
+ "清晰度": [
+  "prefilter.js",
+  "streams.js"
  ],
- "清单里没有合适的类型时用。新类型会和 44 个标准类型一起出现在左侧；先确认几张样板，再“重新训练并归类全部”，模型才会往这个类型里归。": [
-  "types.js"
+ "清晰度 {3}": [
+  "prefilter.js"
+ ],
+ "清晰度 {6}": [
+  "prefilter.js"
+ ],
+ "清晰度满分值": [
+  "prefilter.js"
  ],
  "清空": [
   "app.js",
+  "prefilter.js",
   "types.js"
  ],
  "清空回收站": [
@@ -12805,6 +14374,12 @@
  "点一下跳过去": [
   "models.js"
  ],
+ "点上面的": [
+  "prefilter.js"
+ ],
+ "点上面的分组看每一类": [
+  "app.js"
+ ],
  "点下面的小图切换": [
   "models.js"
  ],
@@ -12850,6 +14425,7 @@
  "点右上角": [
   "guide.js",
   "inspect.js",
+  "prefilter.js",
   "streams.js"
  ],
  "点右上角「添加摄像头」，填 IP、账号密码即可；海康、大华会自动拼好取流地址。": [
@@ -12897,6 +14473,9 @@
  "烧蚀或破损": [
   "agent.py"
  ],
+ "然后": [
+  "types.js"
+ ],
  "然后 bash engine.sh restart": [
   "flow.py"
  ],
@@ -12909,9 +14488,13 @@
  "然后用它在": [
   "flow.py"
  ],
+ "然后自动回收": [
+  "app.js"
+ ],
  "照片": [
   "guide.js",
-  "inspect.js"
+  "inspect.js",
+  "types.js"
  ],
  "照片 → 模型 → 规则 → 合格 / 不合格（借鉴 Ultralytics Agents）。": [
   "guide.js"
@@ -12937,6 +14520,9 @@
  "照片分类器只从人工确认过的照片学：每类至少 5 张、最好来自不同站点。": [
   "app.js"
  ],
+ "照片和数据文件都不删": [
+  "types.js"
+ ],
  "照片常歪着拍时设 5–15": [
   "settings.js"
  ],
@@ -12961,7 +14547,9 @@
   "app.js",
   "flow.py",
   "guide.js",
+  "imagelib.py",
   "inspect.js",
+  "prefilter.js",
   "report.js",
   "streams.js",
   "types.html",
@@ -12999,11 +14587,20 @@
  "照片类型页模型预测": [
   "flow.py"
  ],
+ "照片类型页的哪个图库": [
+  "flow.py"
+ ],
+ "照片类型页的哪个图库（填图库代号，在照片类型页顶部能看到）；空 = 默认图库。上面的照片类型下拉框列的是默认图库的类型": [
+  "flow.py"
+ ],
  "照片类型（可不填）": [
   "flow.py"
  ],
  "照片类型（可不填），如 site_ground、站内地面": [
   "inspect.js"
+ ],
+ "照片类型（旧数据）": [
+  "imagelib.py"
  ],
  "照片还在": [
   "app.js",
@@ -13051,7 +14648,8 @@
   "templates.js"
  ],
  "物流分拣": [
-  "app.js"
+  "app.js",
+  "types.js"
  ],
  "特征模型": [
   "app.js",
@@ -13067,6 +14665,9 @@
  "现在": [
   "datasets.js",
   "types.js"
+ ],
+ "现在人工确认了 {0} 张": [
+  "imagelib.py"
  ],
  "现在共 {0} 张已标注{1}": [
   "models.js"
@@ -13167,10 +14768,13 @@
  "用“正式使用”的模型把这批已标注的图重新看一遍，和人工标注对比：模型很确定有、标注里没有 → 疑似漏标；标了但模型完全不认 → 疑似多标或标错类别；重叠不够 → 框不准。结果按可疑程度排序。": [
   "datasets.js"
  ],
+ "用“送回 Label Studio 复核”送回去，补画新类别后选 Targets reviewed 提交。": [
+  "flow.py"
+ ],
  "用一个 YOLO 模型": [
   "flow.py"
  ],
- "用一个 YOLO 模型（当前子项目的模型，或一个权重文件）扫**“照片类型”页的全部照片**（全平台共用，不属于哪个子项目），按规则“权重里的这些类别 → 这个照片类型”给出**建议**。可以设多条规则（比如 grounding_bar → 接地/防雷；rust → 站内地面），一张图中了多条取置信度最高的。已经人工确认过类型的照片不扫、不改。建议**不算人工确认**：到“照片类型”页各类型的「权重建议」里看图，整批确认或忽略。扫过的会记住，再运行接着扫。": [
+ "用一个 YOLO 模型（当前子项目的模型，或一个权重文件）扫**“照片类型”页某个图库的全部照片**（不属于哪个子项目；默认图库，或在“图库”里填代号），按规则“权重里的这些类别 → 这个照片类型”给出**建议**。可以设多条规则（比如 grounding_bar → 接地/防雷；rust → 站内地面），一张图中了多条取置信度最高的。已经人工确认过类型的照片不扫、不改。建议**不算人工确认**：到“照片类型”页各类型的「权重建议」里看图，整批确认或忽略。扫过的会记住，再运行接着扫。": [
   "flow.py"
  ],
  "用人工确认过的照片训练一个照片类型分类器": [
@@ -13258,6 +14862,18 @@
  "用多边形沿目标边缘描一圈，点不要太稀（拐角处多点几个）": [
   "hub.py"
  ],
+ "用子项目里训练好的检测": [
+  "types.js"
+ ],
+ "用子项目里训练好的检测 / 分类模型扫全部照片，给出类型建议（💡），确认后成为样板": [
+  "types.js"
+ ],
+ "用子项目里训练好的模型扫图库": [
+  "types.js"
+ ],
+ "用子项目里训练好的模型扫图库“{0}”的照片：": [
+  "types.js"
+ ],
  "用它找图": [
   "flow.js"
  ],
@@ -13323,6 +14939,10 @@
  ],
  "用时 {2} 毫秒": [
   "streams.js"
+ ],
+ "用时 {2} 秒": [
+  "imagelib.py",
+  "prefilter.py"
  ],
  "用服务器本机的视觉大模型": [
   "flow.py"
@@ -13421,9 +15041,6 @@
  "用逗号分隔": [
   "types.js"
  ],
- "电池柜……": [
-  "types.js"
- ],
  "电池鼓包": [
   "vlmcheck.py"
  ],
@@ -13432,6 +15049,12 @@
  ],
  "电脑、服务器、其他推理框架通用": [
   "models.js"
+ ],
+ "画了框但没选 Targets reviewed": [
+  "flow.py"
+ ],
+ "画了框却选了 No target": [
+  "flow.py"
  ],
  "画布上还没有节点": [
   "flow.js"
@@ -13483,6 +15106,12 @@
   "streams.js"
  ],
  "画面上的框是最近一次 AI 检测的结果。": [
+  "streams.js"
+ ],
+ "画面加密时才需要": [
+  "streams.js"
+ ],
+ "画面加密时才需要：填了会自动关闭这台设备的“视频加密”（否则拉到的画面解不出来）；也可以在 App 里自己关": [
   "streams.js"
  ],
  "画面变化慢": [
@@ -13635,6 +15264,9 @@
  "的比例": [
   "inspect.js"
  ],
+ "的照片": [
+  "types.js"
+ ],
  "的照片里": [
   "flow.py"
  ],
@@ -13672,11 +15304,36 @@
  "目前只支持在服务器上训练": [
   "models.js"
  ],
+ "目录": [
+  "types.js"
+ ],
  "目录下": [
   "flow.py"
  ],
+ "目录不存在": [
+  "imagelib.py",
+  "types.js"
+ ],
+ "目录不存在：{0}": [
+  "imagelib.py"
+ ],
  "目录建立索引": [
   "flow.py"
+ ],
+ "目录结构照原图目录保留": [
+  "prefilter.js"
+ ],
+ "目录结构照原图目录保留。只增不减：后来改判成“不要”的，已经导出的不会被删掉（到照片类型页里删）。": [
+  "prefilter.js"
+ ],
+ "目录里删掉的从索引去掉": [
+  "types.js"
+ ],
+ "目录里已经没有的去掉": [
+  "prefilter.js"
+ ],
+ "目录里有 {0} 张新照片还没索引": [
+  "types.js"
  ],
  "目标位置变化": [
   "settings.js"
@@ -13763,6 +15420,12 @@
  "直接填地址": [
   "streams.py"
  ],
+ "直接打开那个任务": [
+  "app.js"
+ ],
+ "直接改 Label Studio 里的标注": [
+  "app.js"
+ ],
  "直接用 SigLIP2 按场景类别名猜每张图是什么类型": [
   "flow.py"
  ],
@@ -13804,6 +15467,9 @@
  ],
  "省时间": [
   "settings.js"
+ ],
+ "省流量": [
+  "streams.js"
  ],
  "看不清": [
   "hub.py"
@@ -13877,8 +15543,20 @@
  "短路": [
   "templates.js"
  ],
+ "短边低于多少像素淘汰": [
+  "prefilter.js"
+ ],
+ "短边达到多少像素满分": [
+  "prefilter.js"
+ ],
  "码流": [
   "streams.js"
+ ],
+ "硬链接": [
+  "prefilter.js"
+ ],
+ "硬链接 {0} 张{1}": [
+  "prefilter.js"
  ],
  "确定": [
   "app.js",
@@ -13928,6 +15606,9 @@
   "flow.py",
   "types.js"
  ],
+ "确认后成为样板": [
+  "types.js"
+ ],
  "确认后才算人工确认": [
   "typesuggest.py"
  ],
@@ -13939,6 +15620,7 @@
  ],
  "确认所选图片类别": [
   "app.js",
+  "flow.py",
   "learning.py"
  ],
  "确认抽取": [
@@ -13961,6 +15643,9 @@
  ],
  "确认服务器上 Ollama 在运行": [
   "vlmcheck.py"
+ ],
+ "确认框都画全了": [
+  "flow.py"
  ],
  "确认照片类别": [
   "flow.py",
@@ -13999,6 +15684,9 @@
  "移类": [
   "types.js"
  ],
+ "移除": [
+  "types.js"
+ ],
  "移除所选图片的类别": [
   "app.js"
  ],
@@ -14016,6 +15704,7 @@
   "datasets.js"
  ],
  "稍后再试": [
+  "ezviz.py",
   "streams.py"
  ],
  "稍后到": [
@@ -14051,6 +15740,9 @@
  ],
  "空 = 自动；接着训时可设 0.001": [
   "models.js"
+ ],
+ "空 = 默认图库": [
+  "flow.py"
  ],
  "空开": [
   "agent.py",
@@ -14095,8 +15787,7 @@
  ],
  "站内地面": [
   "flow.py",
-  "inspect.js",
-  "types.js"
+  "inspect.js"
  ],
  "站内杂草": [
   "guide.js",
@@ -14169,9 +15860,11 @@
   "review.js"
  ],
  "第 {0}–{1} 张": [
+  "prefilter.js",
   "types.js"
  ],
  "第 {0}–{1} 张 / 共 {2}": [
+  "prefilter.js",
   "types.js"
  ],
  "第 {1} 次": [
@@ -14204,6 +15897,12 @@
  "等 {0} 类": [
   "models.js"
  ],
+ "等它跑完再来": [
+  "imagelib.py"
+ ],
+ "等工具不填图库时用默认图库": [
+  "types.js"
+ ],
  "等待完成": [
   "developers.js"
  ],
@@ -14224,6 +15923,12 @@
  ],
  "算疑似漏标": [
   "flow.py"
+ ],
+ "管理": [
+  "types.js"
+ ],
+ "管理图库": [
+  "types.js"
  ],
  "管理标注任务": [
   "tasks-ui.js"
@@ -14387,6 +16092,32 @@
  "精确率 Precision：画的框里有多少是对的": [
   "models.js"
  ],
+ "精选": [
+  "prefilter.js",
+  "prefilter.py",
+  "types.js"
+ ],
+ "精选目录不能放在源目录里面": [
+  "prefilter.py"
+ ],
+ "精选目录不能放在源目录里面（下次扫描会把精选的又扫进来）": [
+  "prefilter.py"
+ ],
+ "精选目录不能是源目录的上级目录": [
+  "prefilter.py"
+ ],
+ "精选目录再到": [
+  "prefilter.js"
+ ],
+ "精选目录要写绝对路径": [
+  "prefilter.py"
+ ],
+ "精选目录要写绝对路径，如 /data/images/精选/demo": [
+  "prefilter.py"
+ ],
+ "精选目录里已有 {2} 张": [
+  "prefilter.js"
+ ],
  "系统": [
   "app.js"
  ],
@@ -14400,6 +16131,27 @@
   "types.js"
  ],
  "索引 {0} 张；人工确认 {1} 张，qwen 弱标签 {2} 张；": [
+  "types.js"
+ ],
+ "索引完成": [
+  "imagelib.py"
+ ],
+ "索引完成：共 {0} 张，本次新增 {1} 张，用时 {2} 秒": [
+  "imagelib.py"
+ ],
+ "索引已是最新": [
+  "imagelib.py"
+ ],
+ "索引已是最新：{0} 张": [
+  "imagelib.py"
+ ],
+ "索引文件都不删": [
+  "types.js"
+ ],
+ "索引是最新的": [
+  "types.js"
+ ],
+ "索引更新完成": [
   "types.js"
  ],
  "累计 {4}": [
@@ -14450,6 +16202,12 @@
  "经典基线": [
   "models.js"
  ],
+ "经萤石云连接中…": [
+  "streams.js"
+ ],
+ "经萤石云连接中…（最多 30 秒）": [
+  "streams.js"
+ ],
  "结果也会实时出现在下面": [
   "inspect.js"
  ],
@@ -14496,6 +16254,9 @@
  "给 Label Studio 回调用": [
   "flow.py"
  ],
+ "给临时仓库里的照片找归宿": [
+  "types.js"
+ ],
  "给人复核": [
   "flow.py"
  ],
@@ -14510,6 +16271,9 @@
  ],
  "给你一行 yolo 命令，训完再导入": [
   "models.js"
+ ],
+ "给出 {1} 条建议": [
+  "types.js"
  ],
  "给出**建议**": [
   "flow.py"
@@ -14528,6 +16292,15 @@
  ],
  "给出物体位置和朝向，机械臂按角度抓取。": [
   "templates.js"
+ ],
+ "给出类型建议": [
+  "types.js"
+ ],
+ "给图库里的海量照片自动分类": [
+  "types.js"
+ ],
+ "给图库里的海量照片自动分类：人工确认一些“样板”，模型学会后把其余照片自动归类；拿不准的进“临时仓库”。“按照片类型抽图”“用权重找图”都用这里的结果。": [
+  "types.js"
  ],
  "给大模型用": [
   "developers.js"
@@ -14583,10 +16356,7 @@
  "给每张图标出画质问题（模糊、过暗、过曝、太小等）。**只打标记，不删除**，之后可以在图库里按标记筛选。": [
   "flow.py"
  ],
- "给海量巡检照片自动分类": [
-  "types.js"
- ],
- "给海量巡检照片自动分类（站内地面、大门、电池柜……）：人工确认一些“样板”，模型学会后把其余照片自动归类；拿不准的进“临时仓库”。“按照片类型抽图”“用权重找图”都用这里的结果。": [
+ "给每张图算特征": [
   "types.js"
  ],
  "给画布更多空间": [
@@ -14719,6 +16489,9 @@
  "网络恢复后重新拖入同一个视频": [
   "models.js"
  ],
+ "网页上新增的照片类型": [
+  "imagelib.py"
+ ],
  "网页上看带框的图": [
   "flow.py"
  ],
@@ -14727,6 +16500,9 @@
  ],
  "网页常用": [
   "developers.js"
+ ],
+ "网页新增": [
+  "imagelib.py"
  ],
  "置信度下限": [
   "flow.py",
@@ -14896,8 +16672,14 @@
  "自定义": [
   "app.js"
  ],
+ "自定义类型.yaml": [
+  "imagelib.py"
+ ],
  "自己定任务类型和类别": [
   "overview.js"
+ ],
+ "自己的照片类型": [
+  "types.js"
  ],
  "至少 2 个类别": [
   "app.js",
@@ -14909,8 +16691,17 @@
  "至少几个目标": [
   "flow.py"
  ],
+ "至少确认 20 张": [
+  "imagelib.py"
+ ],
  "至少要 4 张": [
   "learning.py"
+ ],
+ "至少要一条完整的规则": [
+  "types.js"
+ ],
+ "至少要一条完整的规则：勾选类别，再选照片类型": [
+  "types.js"
  ],
  "至少要一条规则": [
   "typesuggest.py"
@@ -14926,6 +16717,9 @@
  ],
  "至少要能分成 {0} 组互不相干的图": [
   "labels.py"
+ ],
+ "至少认出几个目标": [
+  "types.js"
  ],
  "航拍旋转目标": [
   "templates.js"
@@ -14980,7 +16774,25 @@
  "英文": [
   "types.js"
  ],
+ "英文 {1} 项": [
+  "imagelib.py"
+ ],
  "英文代号": [
+  "types.js"
+ ],
+ "英文代号只能用小写字母": [
+  "imagelib.py"
+ ],
+ "英文代号只能用小写字母、数字、下划线，并以字母开头（如 generator）": [
+  "imagelib.py"
+ ],
+ "英文代号已存在": [
+  "imagelib.py"
+ ],
+ "英文代号已存在：{0}": [
+  "imagelib.py"
+ ],
+ "英文名": [
   "types.js"
  ],
  "英文名 *": [
@@ -14988,6 +16800,9 @@
  ],
  "英文名称": [
   "categories.js"
+ ],
+ "苹果": [
+  "types.js"
  ],
  "草多": [
   "flow.py",
@@ -14997,6 +16812,32 @@
  ],
  "草多 {4}": [
   "review.js"
+ ],
+ "萤石云": [
+  "ezviz.py",
+  "streams.js",
+  "streams.py"
+ ],
+ "萤石云数据异常": [
+  "ezviz.py"
+ ],
+ "萤石云数据异常，稍后再试": [
+  "ezviz.py"
+ ],
+ "萤石云没有返回 accessToken": [
+  "ezviz.py"
+ ],
+ "萤石云没有返回直播地址": [
+  "ezviz.py"
+ ],
+ "萤石云视频": [
+  "streams.js"
+ ],
+ "萤石云返回的不是 JSON": [
+  "ezviz.py"
+ ],
+ "萤石云：{0}（错误码 {1}）": [
+  "ezviz.py"
  ],
  "蓝色虚线 = 人工标注": [
   "datasets.js"
@@ -15025,15 +16866,14 @@
  "补查旧图时，先用少量新类别标注训一个初版模型，再用它给旧图预画新类别的框，比人工从头找快得多。": [
   "app.js"
  ],
- "补查更快": [
-  "app.js"
- ],
  "补漏框": [
   "app.js",
   "flow.py"
  ],
  "补画新类别": [
-  "app.js",
+  "flow.py"
+ ],
+ "补画新类别后选 Targets reviewed 提交": [
   "flow.py"
  ],
  "表格": [
@@ -15064,6 +16904,12 @@
  "装好后可以直接对 Agent 说：“看看 demo 现在的正式模型成绩”“用 mcb-loop 跑一轮主动学习”“质检这张照片 C:/xx.jpg”。": [
   "developers.js"
  ],
+ "要": [
+  "prefilter.js"
+ ],
+ "要 {0} · 不要 {1}": [
+  "prefilter.js"
+ ],
  "要上线的模型用": [
   "settings.js"
  ],
@@ -15091,6 +16937,9 @@
  "要删除选中的 {0} 张照片：": [
   "types.js"
  ],
+ "要到该类型的": [
+  "types.js"
+ ],
  "要加大训练图像大小": [
   "datasets.js"
  ],
@@ -15103,14 +16952,23 @@
  "要在服务器上先打包": [
   "models.js"
  ],
+ "要在服务器允许读的图片目录里": [
+  "types.js"
+ ],
  "要带模型预框请用": [
   "flow.py"
+ ],
+ "要打分 {1} 张": [
+  "prefilter.py"
  ],
  "要抽别的类型": [
   "flow.py"
  ],
  "要换编号请删掉重建": [
   "streams.py"
+ ],
+ "要改的话": [
+  "flow.py"
  ],
  "要更快可 480": [
   "flow.py",
@@ -15135,6 +16993,12 @@
  ],
  "要看全部参数和连线": [
   "flow.js"
+ ],
+ "要算特征 {0} 张": [
+  "imagelib.py"
+ ],
+ "要算特征 {0} 张（已有 {1} 张）": [
+  "imagelib.py"
  ],
  "覆盖 2 个类别": [
   "learning.py"
@@ -15194,7 +17058,11 @@
   "flow.py"
  ],
  "规则 {0}": [
-  "flow.js"
+  "flow.js",
+  "types.js"
+ ],
+ "规则 {0}：模型认出这些类别 →": [
+  "types.js"
  ],
  "规则“{0}”要写成“权重类别>照片类型”，多个类别用逗号分开": [
   "typesuggest.py"
@@ -15278,6 +17146,9 @@
  "视频 {0} 秒，抽出 {1} 帧，跳过相似帧 {2} 张，已加进子项目（{3} 张，按内容去重）。": [
   "toolbox.js"
  ],
+ "视频加密": [
+  "streams.js"
+ ],
  "视频可在": [
   "flow.py"
  ],
@@ -15332,8 +17203,17 @@
  "角度不对": [
   "app.js"
  ],
+ "角度大于 45° 的不自动转": [
+  "app.js"
+ ],
  "解压后是": [
   "models.js"
+ ],
+ "解码失败": [
+  "prefilter.py"
+ ],
+ "解码失败：{0}": [
+  "prefilter.py"
  ],
  "让本机 Ollama 的 qwen2.5vl 看图补一句说明": [
   "inspect.js"
@@ -15657,8 +17537,32 @@
   "models.js",
   "overview.js"
  ],
+ "设为默认": [
+  "types.js"
+ ],
  "设备": [
   "flow.py"
+ ],
+ "设备不在线": [
+  "ezviz.py"
+ ],
+ "设备不在线：检查摄像头电源和网络，在萤石云视频 App 里能不能看到": [
+  "ezviz.py"
+ ],
+ "设备不存在": [
+  "ezviz.py"
+ ],
+ "设备不存在：检查序列号（机身标签上 9 位左右的字母数字）": [
+  "ezviz.py"
+ ],
+ "设备响应超时": [
+  "ezviz.py"
+ ],
+ "设备序列号": [
+  "streams.js"
+ ],
+ "设备验证码": [
+  "streams.js"
  ],
  "设类别": [
   "guide.js"
@@ -15792,6 +17696,9 @@
  "语言": [
   "flow.py"
  ],
+ "误判也多": [
+  "types.js"
+ ],
  "误报": [
   "datasets.js"
  ],
@@ -15837,6 +17744,9 @@
  "请刷新页面重新输入": [
   "models.js"
  ],
+ "请在 Label Studio 里重画": [
+  "app.js"
+ ],
  "请在引擎 .env 里设置 {0}": [
   "media.py"
  ],
@@ -15849,8 +17759,17 @@
  "请在输入框里输入“删除”两个字": [
   "types.js"
  ],
+ "请填写中文名": [
+  "imagelib.py"
+ ],
  "请填写任务代码和名称": [
   "tasks-ui.js"
+ ],
+ "请填写英文名": [
+  "imagelib.py"
+ ],
+ "请填写英文名（中英文都要有）": [
+  "imagelib.py"
  ],
  "请填摄像头": [
   "streams.py"
@@ -15860,6 +17779,18 @@
  ],
  "请填编号": [
   "streams.js"
+ ],
+ "请填萤石开放平台的 AppKey 和 AppSecret": [
+  "ezviz.py"
+ ],
+ "请填萤石开放平台的 AppKey 和 AppSecret（open.ys7.com → 我的应用）": [
+  "ezviz.py"
+ ],
+ "请填设备序列号": [
+  "ezviz.py"
+ ],
+ "请填设备序列号（机身标签或萤石云视频 App 设备信息里，字母数字）": [
+  "ezviz.py"
  ],
  "请手动选中复制": [
   "models.js"
@@ -15878,6 +17809,12 @@
  ],
  "请换一个系列或大小": [
   "models.js"
+ ],
+ "请有经验的人看一下再定": [
+  "flow.py"
+ ],
+ "请有经验的人看一下再定。": [
+  "flow.py"
  ],
  "请检查连线": [
   "flow.js"
@@ -15899,6 +17836,12 @@
  ],
  "请确认": [
   "types.js"
+ ],
+ "请给图库起个名字": [
+  "imagelib.py"
+ ],
+ "请给图库起个名字，如：水果分拣": [
+  "imagelib.py"
  ],
  "请输入 LOTA 引擎的访问口令": [
   "flow.js",
@@ -15953,6 +17896,12 @@
  "读不了这张图片": [
   "media.py"
  ],
+ "读不出文件": [
+  "prefilter.py"
+ ],
+ "读不出文件：{0}": [
+  "prefilter.py"
+ ],
  "读不到权重类别": [
   "flow.js"
  ],
@@ -15991,6 +17940,9 @@
  ],
  "读图进程数，2 即可": [
   "app.js"
+ ],
+ "调低建议多": [
+  "types.js"
  ],
  "调低建议多但误判也多": [
   "flow.py"
@@ -16136,6 +18088,12 @@
  ],
  "越多": [
   "datasets.js"
+ ],
+ "越大去得越狠": [
+  "prefilter.js"
+ ],
+ "越大越清晰": [
+  "prefilter.js"
  ],
  "越大越能看清小目标": [
   "models.js"
@@ -16307,11 +18265,22 @@
  ],
  "过暗": [
   "flow.py",
+  "prefilter.py",
   "vlmcheck.py"
+ ],
+ "过暗过曝": [
+  "prefilter.js"
+ ],
+ "过暗（{0}）": [
+  "prefilter.py"
  ],
  "过曝": [
   "flow.py",
+  "prefilter.py",
   "vlmcheck.py"
+ ],
+ "过曝（{0}）": [
+  "prefilter.py"
  ],
  "过的标注也会被打包进来": [
   "datasets.js"
@@ -16388,6 +18357,12 @@
  "还是没有": [
   "guide.js"
  ],
+ "还有 {0} 个别处的硬链接没找到": [
+  "imagelib.py"
+ ],
+ "还有 {0} 张没扫": [
+  "types.js"
+ ],
  "还没人工确认的": [
   "review.html"
  ],
@@ -16412,6 +18387,12 @@
  "还没打包数据集": [
   "hub.py"
  ],
+ "还没扫描": [
+  "prefilter.js"
+ ],
+ "还没扫描：点上面的“扫描”": [
+  "prefilter.js"
+ ],
  "还没拿到画面": [
   "streams.py"
  ],
@@ -16435,6 +18416,12 @@
  "还没有任务": [
   "models.js"
  ],
+ "还没有初选任务": [
+  "prefilter.js"
+ ],
+ "还没有初选任务：点右上角“新建初选”，选一个原图目录": [
+  "prefilter.js"
+ ],
  "还没有勾选图片": [
   "app.js"
  ],
@@ -16446,6 +18433,16 @@
  ],
  "还没有勾选图片：先在图库里勾选要复核的照片。": [
   "app.js"
+ ],
+ "还没有图库": [
+  "imagelib.py",
+  "types.js"
+ ],
+ "还没有图库。图库 = 一个图片目录（通常是“初选”导出的精选目录）+ 它自己的照片类型。通信巡检、物流分拣、水果分拣……各建一个，互不干扰。": [
+  "types.js"
+ ],
+ "还没有图库：先在“照片类型”页新建一个（选一个图片目录）": [
+  "imagelib.py"
  ],
  "还没有子项目": [
   "models.js"
@@ -16505,8 +18502,20 @@
  "还没有正式模型": [
   "overview.js"
  ],
+ "还没有特征索引": [
+  "imagelib.py"
+ ],
+ "还没有特征索引：先点“更新索引”": [
+  "imagelib.py"
+ ],
  "还没有空开模型": [
   "flow.py"
+ ],
+ "还没有精选目录": [
+  "types.js"
+ ],
+ "还没有精选目录？先去初选": [
+  "types.js"
  ],
  "还没有规则": [
   "inspect.js"
@@ -16583,6 +18592,9 @@
  "这一块太大或超过了文件大小": [
   "hub.py"
  ],
+ "这一层有 {1} 张图片": [
+  "prefilter.js"
+ ],
  "这一帧": [
   "models.js"
  ],
@@ -16617,6 +18629,9 @@
  "这一版要有测试集": [
   "flow.py"
  ],
+ "这一组": [
+  "app.js"
+ ],
  "这一项不用管": [
   "flow.js"
  ],
@@ -16632,6 +18647,12 @@
  "这个分类器版本名已经用过了，换一个 / Classifier version already exists": [
   "learning.py"
  ],
+ "这个图库还没有照片类型": [
+  "types.js"
+ ],
+ "这个图库还没有照片类型：先新增几个，再到“临时仓库”里给每类确认几张样板，然后“重新训练并归类全部”。": [
+  "types.js"
+ ],
  "这个子项目没连接 Label Studio": [
   "datasets.js"
  ],
@@ -16643,6 +18664,9 @@
  ],
  "这个子项目还没有复核单：在工作流里运行“覆盖率判定”节点会生成。": [
   "review.js"
+ ],
+ "这个子项目还没有训练好的模型": [
+  "types.js"
  ],
  "这个子项目还没有质检规则": [
   "streams.js"
@@ -16682,6 +18706,9 @@
  "这个模型没有按类别的成绩（训练于本功能上线前，或是分类模型）。重新评估一次就会有。": [
   "models.js"
  ],
+ "这个模型没有类别信息": [
+  "types.js"
+ ],
  "这个模板属于子项目": [
   "flow.js"
  ],
@@ -16690,6 +18717,16 @@
  ],
  "这个照片类型": [
   "flow.py"
+ ],
+ "这个目录已经是图库": [
+  "imagelib.py",
+  "types.js"
+ ],
+ "这个目录已经是图库“{0}”了": [
+  "imagelib.py"
+ ],
+ "这个目录已经是图库“{0}”了；新导出的照片点“更新索引”就进来": [
+  "types.js"
  ],
  "这个类型还没有人工确认的样板": [
   "types.js"
@@ -16705,6 +18742,12 @@
  ],
  "这个视频之前已经传完，直接分析": [
   "models.js"
+ ],
+ "这个账号下没有这台设备": [
+  "ezviz.py"
+ ],
+ "这个账号下没有这台设备：先用萤石云视频 App 把设备添加到开放平台对应的账号": [
+  "ezviz.py"
  ],
  "这么多轮没进步就停": [
   "models.js"
@@ -16744,6 +18787,15 @@
  ],
  "这些网络标准是 224；细节多的图可用 384（更慢）": [
   "flow.py"
+ ],
+ "这台设备的直播地址没开通": [
+  "ezviz.py"
+ ],
+ "这张已被永久删除": [
+  "imagelib.py"
+ ],
+ "这张已被永久删除，无法恢复": [
+  "imagelib.py"
  ],
  "这是一张": [
   "overview.js"
@@ -16794,6 +18846,10 @@
   "flow.html"
  ],
  "这里没有照片": [
+  "prefilter.js",
+  "types.js"
+ ],
+ "这里的照片和类型都看不到": [
   "types.js"
  ],
  "这里给自动化用": [
@@ -16848,6 +18904,12 @@
  ],
  "连不上摄像头，{0} 秒后重试": [
   "streams.py"
+ ],
+ "连不上萤石云": [
+  "ezviz.py"
+ ],
+ "连不上萤石云（{0}）：{1}": [
+  "ezviz.py"
  ],
  "连不上：": [
   "overview.js"
@@ -16954,6 +19016,9 @@
  "送回 Label Studio 复核（带已有的框）": [
   "flow.py"
  ],
+ "送回去": [
+  "flow.py"
+ ],
  "送回复核": [
   "app.js",
   "flow.py"
@@ -17028,11 +19093,23 @@
  "选 No target 的图": [
   "datasets.js"
  ],
- "选 Targets reviewed 提交即可": [
-  "app.js"
+ "选 Targets reviewed 再提交": [
+  "flow.py"
  ],
  "选一个 YOLO 底座": [
   "models.js"
+ ],
+ "选一个初选任务": [
+  "prefilter.js"
+ ],
+ "选一个初选任务，或新建一个": [
+  "prefilter.js"
+ ],
+ "选一个原图目录": [
+  "prefilter.js"
+ ],
+ "选一个图片目录": [
+  "imagelib.py"
  ],
  "选一个提交时会自动加进本场景": [
   "app.js"
@@ -17112,11 +19189,26 @@
  "选择照片类型": [
   "flow.js"
  ],
+ "选择目录": [
+  "prefilter.js"
+ ],
  "选模板": [
   "guide.js"
  ],
+ "选照片类型": [
+  "types.js"
+ ],
  "选窗宽窗位": [
   "guide.js"
+ ],
+ "选精选目录": [
+  "prefilter.js"
+ ],
+ "选精选目录（可以在下面新建子目录）": [
+  "prefilter.js"
+ ],
+ "选这个目录": [
+  "prefilter.js"
  ],
  "选项": [
   "app.js"
@@ -17131,6 +19223,9 @@
  "逐张看图": [
   "flow.py"
  ],
+ "逐张算分辨率": [
+  "prefilter.js"
+ ],
  "逗号分隔": [
   "app.js"
  ],
@@ -17143,7 +19238,14 @@
  ],
  "通信巡检": [
   "app.js",
-  "templates.js"
+  "templates.js",
+  "types.js"
+ ],
+ "通常是": [
+  "types.js"
+ ],
+ "通常是“初选”导出的精选目录；要在服务器允许读的图片目录里": [
+  "types.js"
  ],
  "通常是同一站点": [
   "flow.py"
@@ -17274,6 +19376,9 @@
  "里写关键点名称": [
   "labels.py"
  ],
+ "里填代号": [
+  "flow.py"
+ ],
  "里定义": [
   "flow.py"
  ],
@@ -17282,6 +19387,9 @@
  ],
  "里恢复": [
   "types.js"
+ ],
+ "里拿 AppKey 和 AppSecret": [
+  "streams.js"
  ],
  "里接": [
   "toolbox.js"
@@ -17298,11 +19406,20 @@
  "里查看": [
   "ui.js"
  ],
+ "里没有": [
+  "flow.py"
+ ],
  "里添加": [
   "learning.py"
  ],
  "里用节点": [
   "toolbox.js"
+ ],
+ "里的": [
+  "types.js"
+ ],
+ "里的 AppKey": [
+  "ezviz.py"
  ],
  "里的新照片登记进来": [
   "flow.py"
@@ -17311,13 +19428,17 @@
   "guide.js"
  ],
  "里看图": [
-  "flow.py"
+  "flow.py",
+  "types.js"
  ],
  "里确认几张": [
   "types.js"
  ],
  "里确认或忽略": [
   "typesuggest.py"
+ ],
+ "里给每类确认几张样板": [
+  "types.js"
  ],
  "里统一改": [
   "models.js"
@@ -17342,6 +19463,12 @@
  ],
  "重名会自动加 1": [
   "models.js"
+ ],
+ "重复": [
+  "prefilter.js"
+ ],
+ "重复 / 几乎一样": [
+  "prefilter.js"
  ],
  "重复 {2}{3}": [
   "flow.js"
@@ -17372,6 +19499,12 @@
  "重新打包一版": [
   "labels.py"
  ],
+ "重新扫图库目录": [
+  "types.js"
+ ],
+ "重新扫图库目录：只给新照片算特征，目录里删掉的从索引去掉。原图目录补了新照片、初选又导出了新的之后点这个": [
+  "types.js"
+ ],
  "重新训练": [
   "flow.py"
  ],
@@ -17380,6 +19513,9 @@
  ],
  "重新评估一次就会有": [
   "models.js"
+ ],
+ "重新送这张图标注": [
+  "flow.py"
  ],
  "重试": [
   "app.js"
@@ -17448,6 +19584,21 @@
  "错误会一轮轮被模型学进去": [
   "app.js"
  ],
+ "错误码 {1}": [
+  "ezviz.py"
+ ],
+ "长宽比太极端": [
+  "prefilter.py"
+ ],
+ "长宽比太极端（{0}）": [
+  "prefilter.py"
+ ],
+ "长宽比超过多少淘汰": [
+  "prefilter.js"
+ ],
+ "长条截图之类": [
+  "prefilter.js"
+ ],
  "问题清单": [
   "report.js"
  ],
@@ -17459,6 +19610,12 @@
  ],
  "阈值和人工不一致的": [
   "review.html"
+ ],
+ "阈值和导出范围": [
+  "prefilter.js"
+ ],
+ "阈值和导出范围（改了立刻重新分档，不用重扫）": [
+  "prefilter.js"
  ],
  "防止": [
   "settings.js"
@@ -17473,7 +19630,8 @@
   "settings.js"
  ],
  "防雷": [
-  "flow.py"
+  "flow.py",
+  "types.js"
  ],
  "阴天": [
   "settings.js"
@@ -17576,11 +19734,7 @@
   "agent.py"
  ],
  "需要复核": [
-  "app.js",
   "guide.js"
- ],
- "需要复核：": [
-  "app.js"
  ],
  "需要整理": [
   "templates.js"
@@ -17626,10 +19780,19 @@
   "flow.py",
   "typesuggest.py"
  ],
+ "页建成图库": [
+  "prefilter.js"
+ ],
  "页归为这一类的原图": [
   "flow.py"
  ],
  "页把人工确认过的": [
+  "flow.py"
+ ],
+ "页新建一个": [
+  "imagelib.py"
+ ],
+ "页某个图库的全部照片**": [
   "flow.py"
  ],
  "页查看": [
@@ -17637,9 +19800,6 @@
  ],
  "页的": [
   "app.js"
- ],
- "页的全部照片**": [
-  "flow.py"
  ],
  "页的归类结果": [
   "flow.py"
@@ -17761,7 +19921,8 @@
   "app.js"
  ],
  "预览": [
-  "app.js"
+  "app.js",
+  "prefilter.js"
  ],
  "预览 · 正在加载原图…": [
   "app.js"
@@ -17792,6 +19953,12 @@
  ],
  "首页": [
   "app.js"
+ ],
+ "香蕉": [
+  "types.js"
+ ],
+ "香蕉,Banana": [
+  "types.js"
  ],
  "验证": [
   "app.js",
@@ -17872,13 +20039,20 @@
   "guide.js"
  ],
  "高": [
-  "datasets.js"
+  "datasets.js",
+  "prefilter.js"
  ],
  "高 ISO 夜拍噪点多": [
   "media.py"
  ],
  "高 ISO 夜拍噪点多（较慢）": [
   "media.py"
+ ],
+ "高+中档去重后": [
+  "prefilter.js"
+ ],
+ "高+中档去重后，含人工改判": [
+  "prefilter.js"
  ],
  "高清": [
   "streams.js"
@@ -17911,7 +20085,8 @@
  "默认": [
   "app.js",
   "developers.js",
-  "flow.py"
+  "flow.py",
+  "types.js"
  ],
  "默认 0.015": [
   "settings.js"
@@ -17952,6 +20127,9 @@
  "默认只预演": [
   "flow.py"
  ],
+ "默认图库": [
+  "flow.py"
+ ],
  "默认接着最新模型训": [
   "settings.js"
  ],
@@ -17966,6 +20144,9 @@
  ],
  "默认检查点": [
   "app.js"
+ ],
+ "默认用目录名": [
+  "prefilter.js"
  ],
  "默认等它完成": [
   "developers.js"
@@ -17994,6 +20175,9 @@
  ],
  "（原图加载失败，显示的是预览）": [
   "app.js"
+ ],
+ "（原目录里的 {0} 处也链回去了）": [
+  "imagelib.py"
  ],
  "（只从本场景删除，原图文件保留）": [
   "app.js"
@@ -18030,6 +20214,9 @@
  ],
  "（模型 {0}）：": [
   "inspect.js"
+ ],
+ "（没有子目录）": [
+  "prefilter.js"
  ],
  "（没选）": [
   "typesuggest.py"
@@ -18068,6 +20255,9 @@
  "（选择照片类型）": [
   "flow.js"
  ],
+ "（选照片类型）": [
+  "types.js"
+ ],
  "）已创建并启用：": [
   "overview.js"
  ],
@@ -18077,6 +20267,9 @@
  "＋ 再加一条条件": [
   "inspect.js"
  ],
+ "＋ 再加一条规则": [
+  "types.js"
+ ],
  "＋ 打包最新标注": [
   "datasets.js"
  ],
@@ -18085,6 +20278,12 @@
  ],
  "＋ 新建": [
   "index.html"
+ ],
+ "＋ 新建初选": [
+  "prefilter.js"
+ ],
+ "＋ 新建图库": [
+  "types.js"
  ],
  "＋ 新建子项目": [
   "guide.js",
@@ -18104,6 +20303,9 @@
  ],
  "＋ 训练新模型": [
   "models.js"
+ ],
+ "，{0} 秒后重试": [
+  "streams.py"
  ],
  "，「新建规则」：如“当 weeds 的覆盖率 > 5% → 不合格：站内杂草较多”；规则用大白话填，可选让视觉大模型补一句说明。": [
   "guide.js"
@@ -18138,10 +20340,28 @@
  "；交互式文档在": [
   "guide.js"
  ],
+ "；原目录里的同一张也一起移走了（{0} 处）": [
+  "imagelib.py"
+ ],
+ "；去掉目录里已没有的 {0} 张": [
+  "imagelib.py"
+ ],
+ "；导出新入选的…": [
+  "prefilter.py"
+ ],
  "；已标为排除 {0} 张": [
   "flow.js"
  ],
+ "；新链入精选目录 {0} 张（已有 {1} 张）": [
+  "prefilter.py"
+ ],
  "；现在归在：{0}": [
+  "types.js"
+ ],
+ "；还有 {0} 个别处的硬链接没找到，永久删除后磁盘空间也不会释放": [
+  "imagelib.py"
+ ],
+ "；还有 {0} 张没扫，再点一次接着扫": [
   "types.js"
  ],
  "🎬 视频怎么标": [
@@ -18273,6 +20493,9 @@
  ],
  "🤖 AI 检测：未开启": [
   "streams.js"
+ ],
+ "🤖 用模型辅助归类": [
+  "types.js"
  ],
  "🤖 给 Agent / Claude 用": [
   "guide.js"

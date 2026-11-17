@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<script src="/static/i18n.js?v=20"></script><script src="/static/combo.js?v=1"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>初选 · LOTA</title>
+<link rel="stylesheet" href="/static/ui.css?v=3">
+<script src="/static/ui.js?v=16"></script>
+<style>
+  .pf { display: grid; grid-template-columns: 280px 1fr; gap: 16px; align-items: start; }
+  .jlist { position: sticky; top: 70px; max-height: calc(100vh - 90px); overflow: auto; padding: 8px; }
+  .jitem { padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+  .jitem:hover { background: var(--brand-50); } .jitem.on { background: var(--brand-100); }
+  .jitem .p { font-size: 11px; color: var(--muted); word-break: break-all; }
+  .pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+  .pcell { position: relative; border-radius: 10px; overflow: hidden; background: #e7ece9; aspect-ratio: 4/3; border: 2px solid transparent; cursor: pointer; }
+  .pcell img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .pcell.sel { border-color: var(--brand-600); box-shadow: 0 0 0 2px rgba(47,158,120,.25); }
+  .pcell.out img { opacity: .45; filter: grayscale(.6); }
+  .pcell .tag { position: absolute; left: 6px; bottom: 6px; right: 6px; display: flex; gap: 4px; flex-wrap: wrap; }
+  .pcell .chk { position: absolute; right: 6px; top: 6px; width: 20px; height: 20px; border-radius: 6px; background: rgba(255,255,255,.9); display: grid; place-items: center; font-size: 13px; }
+  .pcell .why { position: absolute; left: 0; right: 0; top: 0; padding: 4px 6px; font-size: 11px; color: #fff; background: linear-gradient(rgba(0,0,0,.6), transparent); }
+  .t-high { background: #2f9e78 !important; color: #fff !important; } .t-medium { background: #3b82c4 !important; color: #fff !important; }
+  .t-low { background: #c98a1b !important; color: #fff !important; } .t-rejected { background: #c0392b !important; color: #fff !important; }
+  .bar { position: sticky; top: 54px; z-index: 5; background: var(--bg); padding: 8px 0; }
+  .params { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px 16px; }
+  .params label { font-size: 12px; font-weight: 600; display: block; margin-bottom: 2px; }
+  .params .help { font-size: 11px; color: var(--muted); }
+  .hist { width: 100%; height: 120px; display: block; }
+  .dirs { max-height: 360px; overflow: auto; border: 1px solid var(--line-2, #dde4e0); border-radius: 8px; }
+  .dirs div { padding: 6px 10px; cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--line-2, #eef2ef); }
+  .dirs div:hover { background: var(--brand-50); }
+  @media (max-width: 900px) { .pf { grid-template-columns: 1fr; } .jlist { position: static; max-height: 260px; } }
+</style>
+</head>
+<body>
+<main class="page" id="app"><div class="empty">加载中…</div></main>
+<script src="/static/prefilter.js?v=3"></script>
+</body>
+</html>

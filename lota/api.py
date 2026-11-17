@@ -213,6 +213,8 @@ def create_app(home, source_roots=(), weights_roots=(), token=None):
     from . import phototypes
     phototypes.register_routes(router, engine, directory)
     phototypes.register_delete_routes(router, engine)
+    from . import prefilter
+    prefilter.register_routes(router, engine)
     from . import streams
     streams.register_routes(router, engine, directory, app)
     app.include_router(router)
@@ -236,7 +238,7 @@ def create_app(home, source_roots=(), weights_roots=(), token=None):
     def review_page():
         return html("review")
 
-    for _page in ("models", "datasets", "settings", "developers", "inspect", "toolbox", "overview", "guide", "report", "types", "m", "streams"):  # 产品页面（模型中心、数据集、项目设置、开发者 API）
+    for _page in ("models", "datasets", "settings", "developers", "inspect", "toolbox", "overview", "guide", "report", "types", "prefilter", "m", "streams"):  # 产品页面（模型中心、数据集、项目设置、开发者 API）
         app.add_api_route(f"/{_page}", (lambda name: (lambda: html(name)))(_page),
                           methods=["GET"], include_in_schema=False)
 

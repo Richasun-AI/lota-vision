@@ -191,8 +191,7 @@ def judge_coverage(c, predictions, label="", region="lower_half", min_confidence
             "threshold": threshold}
 
 
-# ── 抽图：从⑤类型归类（旧照片归类流水线的分拣结果）按照片类型取原图 ─────────────────
-LEGACY_PIPELINE = deploy.LEGACY_PIPELINE   # ⑤页的归类结果（emb_index / hq_filter）
+# ── 抽图：从“照片类型”页某个图库的归类结果按照片类型取原图 ─────────────────
 IMPORTS = deploy.IMPORTS_DIR
 
 
@@ -201,16 +200,17 @@ class PickType(Spec):
     only_confirmed: bool = False
     limit: int = Field(default=100, ge=1, le=1000)
     seed: int = 42
+    library: str = ""          # 照片类型页的图库代号；空 = 默认图库
 
 
-def pick_type(c, photo_type, only_confirmed=False, limit=100, seed=42):
+def pick_type(c, photo_type, only_confirmed=False, limit=100, seed=42, library=""):
     """按⑤页的照片类型（人工确认优先、否则模型预测）随机抽 N 张原图，复制进项目。抽过的不会重复抽。"""
-    import random, shutil, sys
-    if str(LEGACY_PIPELINE) not in sys.path:
-        sys.path.insert(0, str(LEGACY_PIPELINE))
-    import emb_index as ei, hq_filter as hf
-    eff, human = ei.effective_types(), ei.confirmed_labels()
-    if photo_type not in hf.TAXONOMY:
+    import random, shutil
+    from . import imagelib
+    L = imagelib.get(library)
+    TAX = L.taxonomy
+    eff, human = L.effective_types(), L.confirmed_labels()
+    if photo_type not in TAX:
         raise ValueError(f"照片类型 {photo_type} 不在清单里")
     pool = [p for p, t in eff.items() if t == photo_type and (not only_confirmed or human.get(p) == photo_type)]
     project = Path(c.directory).name
@@ -220,12 +220,12 @@ def pick_type(c, photo_type, only_confirmed=False, limit=100, seed=42):
     random.Random(seed).shuffle(pool)
     chosen = pool[:limit]
     if not chosen:
-        raise ValueError(f"“{hf.TAXONOMY[photo_type]['name']}”没有可抽的新图片（已抽过 {len(picked)} 张）")
+        raise ValueError(f"“{TAX[photo_type]['name']}”没有可抽的新图片（已抽过 {len(picked)} 张）")
     folder = IMPORTS / project / f"{photo_type}-{time.strftime('%Y%m%d-%H%M%S')}"
     folder = _fresh_dir(folder)
     copied = {}   # 复制后的文件 → ⑤页里是不是人工确认过
     for p in chosen:  # 复制，源图不动
-        src = Path(hf.locate(p))
+        src = Path(L.locate(p))
         dst, n = folder / src.name, 1
         while dst.exists():   # 不同文件夹里的同名照片，别互相覆盖
             n += 1
@@ -243,7 +243,7 @@ def pick_type(c, photo_type, only_confirmed=False, limit=100, seed=42):
         if key in kept:
             (confirmed if is_human else predicted).add(key)
     predicted -= confirmed
-    _ensure_category(c, photo_type, hf.TAXONOMY[photo_type])
+    _ensure_category(c, photo_type, TAX[photo_type])
     from .learning import human_labels
     mine = human_labels(c.directory)
     # 本子项目里已经人工确认成别的类别的（比如先归了杂草，照片类型页又说是接地），保留原来的，不覆盖；结果里列出来让人看
@@ -269,20 +269,20 @@ def pick_type(c, photo_type, only_confirmed=False, limit=100, seed=42):
 class BackfillTypes(Spec):
     only_confirmed: bool = False
     dry_run: bool = False
+    library: str = ""          # 照片类型页的图库代号；空 = 默认图库
 
 
-def backfill_types(c, only_confirmed=False, dry_run=False):
+def backfill_types(c, only_confirmed=False, dry_run=False, library=""):
     """给子项目里已有的图补类别：按⑤“照片类型”页的结果。对得上的两种图：
     ① 以前“按照片类型抽图”复制进来的（picked.json 记着原图路径，按内容哈希对）；② 直接扫描原图目录收进来的（按原始路径对）。
     ⑤页人工确认过的 → 本子项目已确认；只是模型预测的 → 归到这类、待复核。本子项目已经人工确认过的图不动；“其他/无关”（临时仓库）不补。"""
-    import sys
     from collections import Counter
-    if str(LEGACY_PIPELINE) not in sys.path:
-        sys.path.insert(0, str(LEGACY_PIPELINE))
-    import emb_index as ei, hq_filter as hf
+    from . import imagelib
     from .catalog import _database
     from .learning import human_labels
-    eff, human = ei.effective_types(), ei.confirmed_labels()
+    L = imagelib.get(library)
+    TAX = L.taxonomy
+    eff, human = L.effective_types(), L.confirmed_labels()
     with _database(c.directory) as db:
         ids = {r[0] for r in db.execute("SELECT image_id FROM images")}
         paths = list(db.execute("SELECT image_id, path FROM observations"))
@@ -293,7 +293,9 @@ def backfill_types(c, only_confirmed=False, dry_run=False):
     log = IMPORTS / Path(c.directory).name / "picked.json"
     missing = 0
     for p in (json.loads(log.read_text()) if log.is_file() else []):   # ① 按内容哈希
-        src = Path(hf.locate(p))
+        if p not in eff:
+            continue           # 不是这个图库的照片
+        src = Path(L.locate(p))
         if not src.is_file():
             missing += 1
             continue
@@ -304,7 +306,7 @@ def backfill_types(c, only_confirmed=False, dry_run=False):
     confirmed, predicted, skipped = {}, {}, Counter()
     for key, p in found.items():
         t = eff.get(p)
-        if not t or t == ei.BIN or t not in hf.TAXONOMY:
+        if not t or t == imagelib.BIN or t not in TAX:
             skipped["其他/无关或没有类型"] += 1
         elif key in mine:
             skipped["本子项目已人工确认"] += 1
@@ -318,13 +320,13 @@ def backfill_types(c, only_confirmed=False, dry_run=False):
         from .learning import confirm
         from .sorting import store_results
         for t in sorted(set(confirmed) | set(predicted)):
-            _ensure_category(c, t, hf.TAXONOMY[t])
+            _ensure_category(c, t, TAX[t])
         for t, keys in confirmed.items():
             confirm(c, keys, t)
         store_results(c.directory, [{"image_id": k, "category": t, "review": "pending", "provenance": "photo_types",
                                      "candidates": [{"label": t, "source": "照片类型页模型预测"}]}
                                     for t, keys in predicted.items() for k in keys])
-    name = lambda t: hf.TAXONOMY[t].get("name", t)
+    name = lambda t: TAX[t].get("name", t)
     return {"dry_run": dry_run, "images": len(ids), "matched": len(found),
             "confirmed": sum(map(len, confirmed.values())), "predicted": sum(map(len, predicted.values())),
             "by_type": {name(t): {"confirmed": len(confirmed.get(t, [])), "predicted": len(predicted.get(t, []))}
@@ -811,7 +813,8 @@ class FindByModel(Spec):
     weights: str = ""                      # .pt 权重文件；和 model 二选一
     model: str = ""                        # 本场景已注册的模型版本或别名（如 latest）；填了就优先用它
     folder: str = str(deploy.IMAGES_DIR)
-    photo_type: str = ""                   # 只在⑤归类为这个照片类型的原图里找（如 ac_distribution）；空 = 扫 folder
+    photo_type: str = ""                   # 只在照片类型页归为这个照片类型的原图里找（如 ac_distribution）；空 = 扫 folder
+    library: str = ""                      # photo_type 属于哪个图库；空 = 默认图库
     order: str = Field(default="sorted", pattern="^(sorted|random)$")   # random = 打乱顺序扫，找到的图更分散
     seed: int = 1
     skip_known: bool = True                # 已经在本场景里的图（含删过的）不算命中
@@ -862,7 +865,7 @@ def _weights_names(path):
 def find_by_model(c, weights="", model="", folder=str(deploy.IMAGES_DIR), photo_type="", order="sorted", seed=1,
                   skip_known=True, strategy="confident", per_folder=0, dedupe=True, labels="", min_confidence=0.5, min_boxes=1,
                   region="full", min_coverage=0.0, scan_limit=5000, max_hits=200, imgsz=640, batch=16, device="0",
-                  restart=False):
+                  restart=False, library=""):
     """用一个 YOLO 模型（.pt 权重，或本场景已注册的模型/别名）去扫原图，把含目标的照片复制进项目。
     扫过的文件记下来，下次接着扫（断点续扫）；源文件不动。"""
     import random
@@ -879,15 +882,13 @@ def find_by_model(c, weights="", model="", folder=str(deploy.IMAGES_DIR), photo_
         w = c.engine.allowed_weights(weights)
     else:
         raise ValueError("请选择权重文件，或填本场景已注册的模型（如 latest）")
-    if photo_type:  # 只在⑤归类为这个类型的原图里找
-        import sys
-        if str(LEGACY_PIPELINE) not in sys.path:
-            sys.path.insert(0, str(LEGACY_PIPELINE))
-        import emb_index as ei, hq_filter as hf
-        pool = sorted(p for p, t in ei.effective_types().items() if t == photo_type)
+    if photo_type:  # 只在照片类型页归为这个类型的原图里找
+        from . import imagelib
+        L = imagelib.get(library)
+        pool = sorted(p for p, t in L.effective_types().items() if t == photo_type)
         if not pool:
-            raise ValueError(f"⑤类型归类里没有“{photo_type}”类型的照片")
-        all_files = [Path(hf.locate(p)) for p in pool]
+            raise ValueError(f"图库“{L.name}”里没有“{photo_type}”类型的照片")
+        all_files = [Path(L.locate(p)) for p in pool]
         all_files = [p for p in all_files if p.is_file()]
         root = "⑤:" + photo_type
     else:
@@ -1359,7 +1360,7 @@ NODES = {
             "clear": P("取消固定", "勾选 = 不再固定考试集", "toggle", False)}},
     "types.classify_by_weights": {
         "title": "按权重给照片类型归类",
-        "desc": "用一个 YOLO 模型（当前子项目的模型，或一个权重文件）扫**“照片类型”页的全部照片**（全平台共用，不属于哪个子项目），"
+        "desc": "用一个 YOLO 模型（当前子项目的模型，或一个权重文件）扫**“照片类型”页某个图库的全部照片**（不属于哪个子项目；默认图库，或在“图库”里填代号），"
                 "按规则“权重里的这些类别 → 这个照片类型”给出**建议**。可以设多条规则（比如 grounding_bar → 接地/防雷；rust → 站内地面），一张图中了多条取置信度最高的。"
                 "已经人工确认过类型的照片不扫、不改。建议**不算人工确认**：到“照片类型”页各类型的「权重建议」里看图，整批确认或忽略。扫过的会记住，再运行接着扫。",
         "inputs": [], "outputs": [],
@@ -1374,7 +1375,8 @@ NODES = {
             "imgsz": P("推理尺寸", "640 常用；目标很小用 960", "number", 640, min=160, max=2048, step=32),
             "batch": P("批大小", "", "number", 16, min=1, max=128, step=1),
             "device": P("设备", "0 = 显卡，cpu = 处理器（很慢）", "combo", "0", values=["0", "cpu"]),
-            "restart": P("从头扫", "勾选 = 忘掉之前扫过的记录，全部重扫", "toggle", False)}},
+            "restart": P("从头扫", "勾选 = 忘掉之前扫过的记录，全部重扫", "toggle", False),
+            "library": P("图库（可不填）", "照片类型页的哪个图库（填图库代号，在照片类型页顶部能看到）；空 = 默认图库。上面的照片类型下拉框列的是默认图库的类型", "text", "")}},
     "curation.find_by_model": {
         "title": "用权重找图", "desc": "选一个现成的 YOLO 权重（如 yolov8n.pt），去扫服务器上的海量原图，把**含目标的照片**挑出来复制进项目（源文件不动），"
                 "并生成复核单看框。扫过的会记住，**再运行就接着往下扫**（断点续扫）。",
@@ -1385,6 +1387,7 @@ NODES = {
             "model": P("用本场景的模型（可不填）", "填本场景已注册的模型版本或别名，如 latest（主动学习每轮训练出的最新模型）；填了就不用下面的权重文件", "model", ""),
             "weights": P("权重", "用哪个 YOLO 权重来找，检测模型、分类模型都行。选中节点后，右侧说明里会列出它能识别的类别", "weights"),
             "photo_type": P("只在这类照片里找（可不填）", "只扫“照片类型”页归为这一类的原图，又快又准，如 交流配电/空开；空 = 扫下面的文件夹", "phototype", ""),
+            "library": P("图库（可不填）", "照片类型页的哪个图库（填图库代号，在照片类型页顶部能看到）；空 = 默认图库。上面的照片类型下拉框列的是默认图库的类型", "text", ""),
             "order": P("扫描顺序", "random = 打乱顺序（找到的图来自更多站点，推荐）；sorted = 按文件名顺序", "combo", "sorted", values=["sorted", "random"]),
             "seed": P("打乱用的随机种子", "换个数字就换一种顺序", "number", 1, min=0, max=100000, step=1),
             "strategy": P("挑图策略", "confident = 挑模型最有把握的（找到够数就停，快）；uncertain = 扫完本次范围再挑模型最拿不准的（置信度接近 0.5，标这些模型进步最快，主动学习推荐）；mixed = 两种交替", "combo", "confident", values=["confident", "uncertain", "mixed"]),
@@ -1409,7 +1412,8 @@ NODES = {
         "inputs": [], "outputs": [],
         "params": {
             "only_confirmed": P("只补人工确认过的", "勾选 = 只补“照片类型”页人工确认过的（最准）；不勾 = 模型预测的也补上，标成待复核", "toggle", False),
-            "dry_run": P("只统计，不写入", "勾选 = 先看看能补多少张、各是什么类型，不改任何东西", "toggle", False)}},
+            "dry_run": P("只统计，不写入", "勾选 = 先看看能补多少张、各是什么类型，不改任何东西", "toggle", False),
+            "library": P("图库（可不填）", "照片类型页的哪个图库（填图库代号，在照片类型页顶部能看到）；空 = 默认图库。上面的照片类型下拉框列的是默认图库的类型", "text", "")}},
     "curation.pick_type": {
         "title": "按照片类型抽图", "desc": "从原始图片里按照片类型（⑤类型归类的结果：人工确认优先，否则模型预测）随机抽 N 张，**复制**进当前子项目，**类别一起带过来**：在“照片类型”页人工确认过的直接算本子项目已确认（可马上训练照片分类器），只是模型预测的归到这类、待复核。子项目还没有这个类别会自动加上。抽过的不会重复抽。",
         "inputs": [], "outputs": [{"name": "图片", "type": "IMAGES", "field": "image_ids"}],
@@ -1417,7 +1421,8 @@ NODES = {
             "photo_type": P("照片类型", "从“照片类型”页的归类结果里抽（括号里是这类有多少张）；类型不准就先去“照片类型”页确认、重新训练", "phototype", "site_ground"),
             "only_confirmed": P("只抽人工确认过的", "勾选 = 只抽你在⑤页确认过类型的图（更准，但少）；不勾 = 也抽模型预测的", "toggle", False),
             "limit": P("抽多少张", "一次标注建议 30～100 张；最多 1000", "number", 50, min=1, max=1000, step=1),
-            "seed": P("随机种子", "换一个数会抽到另一批", "number", 42, min=0, max=99999, step=1)}},
+            "seed": P("随机种子", "换一个数会抽到另一批", "number", 42, min=0, max=99999, step=1),
+            "library": P("图库（可不填）", "照片类型页的哪个图库（填图库代号，在照片类型页顶部能看到）；空 = 默认图库。上面的照片类型下拉框列的是默认图库的类型", "text", "")}},
     "labels.ls_setup": {
         "title": "连接 Label Studio", "desc": "给当前子项目在 Label Studio 里建一个标注项目（标注模板由引擎生成），并允许它读取复制进来的原图。**只需第一次运行**，之后自动复用。需要服务器 .env 里配好 LABEL_STUDIO_TOKEN。",
         "inputs": [], "outputs": [],
