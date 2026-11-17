@@ -2,7 +2,9 @@
 // 类型列表 → 看图（全部/已确认/待确认/没把握）→ 多选确认/移类/放临时仓库 → 找相似图 → 重新训练并归类全部
 "use strict";
 const { h } = UI;
-const TRASH = "__trash__", LIB_KEY = "lota.types.lib";
+const TRASH = "__trash__", LIB_KEY = "lota.types.lib", PAGE_KEY = "lota.types.page";
+let PAGE = 60;
+try { PAGE = [60, 120, 200, 300].includes(+localStorage.getItem(PAGE_KEY)) ? +localStorage.getItem(PAGE_KEY) : 60; } catch { PAGE = 60; }
 let S = null, TR = { total: 0, bytes: 0 }, cur = null, view = "predicted", offset = 0, sel = new Set(), mode = "browse", simItems = [];
 let LIBS = { default: "", libs: [] }, LIB = "", jobPoll = null;
 try { LIB = new URLSearchParams(location.search).get("lib") || localStorage.getItem(LIB_KEY) || ""; } catch { LIB = ""; }
@@ -59,7 +61,7 @@ function watchJob() {
     const t = await api("/api/types/train").catch(() => null); if (!t) return;
     if (t.running) { const b = document.querySelector(".idx-msg"); if (b) b.textContent = "建索引中… " + (t.message || ""); return; }
     clearInterval(jobPoll);
-    if (t.error) UI.toast((t.kind === "index" ? "更新索引失败：" : "训练失败：") + t.error, true, 8000);
+    if (t.error || t.result?.error) UI.toast((t.kind === "index" ? "更新索引失败：" : "没有训练：") + (t.error || t.result.error), true, 8000);
     else if (t.kind === "index") UI.toast(t.result?.message || "索引更新完成", false, 6000);
     else UI.toast(`训练完成：交叉验证准确率 ${UI.pct(t.result?.cv_acc, 1)}，临时仓库捞出 ${t.result?.bin_rescued ?? 0} 张`);
     load();
@@ -225,6 +227,66 @@ function newTypeDlg() {
     } }]);
 }
 
+// 编辑类型：改名称和描述 / 并入另一个类型 / 删除。后两项把本类已确认的样板改过去，再自动重新训练
+function editTypeDlg(t) {
+  const inp = (v, ph) => h("input", { class: "input", value: v || "", placeholder: ph || "" });
+  const row = (l, el, hint) => h("label", { class: "field", style: { display: "block", marginBottom: "10px" } },
+    h("div", { class: "small", style: { fontWeight: 600, marginBottom: "4px" } }, l), el, hint ? h("div", { class: "tiny muted" }, hint) : null);
+  const f = { name: inp(t.name), name_en: inp(t.name_en), prompt: inp(t.prompt, "可不填；如：a photo of a diesel generator room"),
+    must_have: inp((t.must_have || []).join(",")), anomalies: inp((t.anomalies || []).join(",")), anomalies_en: inp((t.anomalies_en || []).filter(Boolean).join(",")) };
+  const others = S.types.filter((x) => x.key !== t.key && !x.bin);
+  const binKey = S.types.find((x) => x.bin)?.key;
+  const opts = (list) => list.map((x) => h("option", { value: x.key }, (x.bin ? "🗃️ " : "") + x.name + (x.bin ? "" : `（${x.count} 张）`)));
+  const mergeSel = h("select", { class: "select", style: { width: "100%" } }, h("option", { value: "" }, "选一个类型…"), ...opts(others));
+  const delSel = h("select", { class: "select", style: { width: "100%" } }, ...opts([S.types.find((x) => x.bin), ...others].filter(Boolean)));
+  const tc = typedConfirm("删除");
+  const done = async (r) => {
+    UI.toast(r.message, false, 7000); sel.clear(); offset = 0; mode = "browse";
+    if (r.dest) cur = r.dest === binKey ? cur : r.dest;
+    await load(); if (S.train?.running) watchJob();
+  };
+  const panes = {
+    edit: h("div", {},
+      h("p", { class: "small muted" }, `代号 ${t.key} 不变，已确认的 ${t.confirmed} 张样板和现有归类都不动。`),
+      row("中文名 *", f.name), row("英文名 *", f.name_en),
+      row("英文描述", f.prompt, "给模型看的一句英文，用于还没有样板时的零样本兜底；改了要重新训练才生效"),
+      row("必拍内容", f.must_have, "用逗号分隔"), row("常见异常（中文）", f.anomalies, "用逗号分隔"), row("常见异常（英文）", f.anomalies_en, "和上面一一对应")),
+    merge: h("div", {},
+      h("p", {}, `把“${t.name}”并入另一个类型：本类已确认的 ${t.confirmed} 张样板全部改成目标类型，模型猜成本类的 ${Math.max(0, t.count - t.confirmed)} 张也先归过去；然后删掉“${t.name}”，自动重新训练。`),
+      row("并入到 *", mergeSel),
+      h("p", { class: "small muted" }, "适合两个类型其实是同一类的情况。操作记在图库的类型修改日志里；并错了可以新建类型再把样板挑回来。")),
+    del: h("div", {},
+      h("p", {}, `删除类型“${t.name}”：本类已确认的 ${t.confirmed} 张样板改到下面选的地方，模型猜成本类的照片先进临时仓库，然后自动重新训练。照片本身不删。`),
+      row("样板改到 *", delSel, "拿不准就放临时仓库，以后再分"),
+      h("div", { class: "field" }, h("label", {}, "确认删除"), tc.el)),
+  };
+  let tab = "edit";
+  const tabs = h("div", { class: "tabs", style: { marginTop: 0 } });
+  const body = h("div", {}, tabs, h("div", { style: { marginTop: "12px" } }));
+  const paint = () => {
+    tabs.replaceChildren(...[["edit", "改名称和描述"], ["merge", "并入另一个类型"], ["del", "删除类型"]].map(([k, l]) =>
+      h("button", { class: tab === k ? "on" : "", onclick: () => { tab = k; paint(); } }, l)));
+    body.lastChild.replaceChildren(panes[tab]);
+  };
+  paint();
+  UI.modal(`编辑类型：${t.name}`, body, [
+    { label: "取消" },
+    { label: "确定", kind: "primary", run: async () => {
+      if (tab === "edit") {
+        const b = Object.fromEntries(Object.entries(f).map(([k, el]) => [k, el.value.trim()]));
+        const r = await api("/api/types/edit", { method: "POST", body: { key: t.key, ...b } });
+        UI.toast(r.message, false, 6000); await load();
+      } else if (tab === "merge") {
+        if (!mergeSel.value) throw new Error("请选要并入的类型");
+        if (!confirm(`确定把“${t.name}”并入“${tname(mergeSel.value)}”？`)) throw new Error("已取消");
+        await done(await api("/api/types/remove", { method: "POST", body: { key: t.key, dest: mergeSel.value, merge: true } }));
+      } else {
+        if (!tc.ok()) throw new Error("请在输入框里输入“删除”两个字");
+        await done(await api("/api/types/remove", { method: "POST", body: { key: t.key, dest: delSel.value } }));
+      }
+    } }]);
+}
+
 async function drawMain() {
   const main = document.getElementById("main"); if (!main || !cur) return;
   if (cur === TRASH) return drawTrash(main);
@@ -249,6 +311,7 @@ async function drawMain() {
         h("div", { class: "small muted" }, `共 ${t.count} 张 · 人工确认 ${t.confirmed} · 没把握 ${t.low}` +
           (typeAcc(cur) ? ` · 本类准确率 ${UI.pct(typeAcc(cur)[0], 0)}` : ""))),
       h("div", { class: "row" },
+        !t.bin ? h("button", { class: "btn", title: "改名称和描述；并入另一个类型；删除这个类型", onclick: () => editTypeDlg(t) }, "✏️ 编辑类型") : null,
         !t.bin ? h("button", { class: "btn" + (mode === "similar" ? " primary" : ""), onclick: () => { mode = mode === "similar" ? "browse" : "similar"; sel.clear(); drawMain(); } },
           mode === "similar" ? "← 回到本类照片" : "🔍 找相似图（用已确认的当样板）") : null)),
     h("div", { class: "row", style: { marginTop: "8px" } },
@@ -267,7 +330,7 @@ async function drawMain() {
   const grid = h("div", { class: "pgrid" });
   const tip = view === "suggested" && mode === "browse" ? UI.pitfall(["这些是模型按权重给的建议，还没人看过。先双击抽看几张（尤其置信度低的），确定没问题再整批「确认为本类」；确认后会成为照片类型分类器的样板，错的也会被学进去。",
     "不对的选中后点「✕ 忽略所选建议」，以后不会再建议成本类型。"]) : null;
-  main.replaceChildren(bar, ...(tip ? [tip] : []), grid, h("div", { id: "pager", class: "row", style: { marginTop: "12px" } }));
+  main.replaceChildren(bar, ...(tip ? [tip] : []), grid, h("div", { id: "pager", class: "row", style: { marginTop: "12px", flexWrap: "wrap" } }));
   let items, total;
   if (mode === "similar") {
     grid.replaceChildren(h("div", { class: "muted small" }, "在其他类型里找和本类已确认照片最像的…"));
@@ -276,7 +339,7 @@ async function drawMain() {
     items = d.items.map((x) => ({ path: x.path, badge: `相似 ${Math.round(x.score * 100)}`, sub: "现在：" + tname(x.current || "") })); total = items.length;
     bar.querySelector(".small.muted").textContent += ` · 样板 ${d.seeds} 张`;
   } else {
-    const d = await api(`/api/types/${cur}/images?view=${view}&offset=${offset}&limit=60`);
+    const d = await api(`/api/types/${cur}/images?view=${view}&offset=${offset}&limit=${PAGE}`);
     total = d.total;
     items = d.items.map((x) => x.suggested ? ({ path: x.path, badge: `💡 ${x.suggested.label} ${Math.round((x.suggested.confidence || 0) * 100)}%`,
       sub: `权重 ${x.suggested.weights || ""} 检出 ${x.suggested.label}` + (x.current ? `；现在归在：${tname(x.current)}` : "") })
@@ -298,12 +361,28 @@ async function drawMain() {
     return cell;
   }) : [h("div", { class: "empty" }, "这里没有照片")]));
   if (mode === "browse") {
-    document.getElementById("pager").replaceChildren(
-      h("button", { class: "btn sm", disabled: !offset, onclick: () => { offset = Math.max(0, offset - 60); drawMain(); } }, "上一页"),
-      h("span", { class: "small muted" }, `第 ${offset + 1}–${Math.min(offset + 60, total)} 张 / 共 ${total}`),
-      h("button", { class: "btn sm", disabled: offset + 60 >= total, onclick: () => { offset += 60; drawMain(); } }, "下一页"),
-      h("span", { class: "tiny muted" }, "单击选中，双击看大图（滚轮缩放、拖动、← → 切换）"));
+    document.getElementById("pager").replaceChildren(...pager(total));
   }
+}
+// 翻页：首页 / 上一页 / 跳到第几页 / 下一页 / 末页 + 每页张数（记在本机浏览器）。选中的照片翻页后保留
+function pager(total) {
+  const pages = Math.max(1, Math.ceil(total / PAGE)), pg = Math.floor(offset / PAGE) + 1;
+  const go = (n) => { n = Math.min(Math.max(1, n | 0), pages); if (n !== pg) { offset = (n - 1) * PAGE; drawMain(); window.scrollTo({ top: 0 }); } };
+  const box = h("input", { class: "input", type: "number", min: 1, max: pages, value: pg, style: { width: "72px", textAlign: "center" },
+    title: "输入页码，回车跳转", onkeydown: (e) => { if (e.key === "Enter") go(+box.value); } });
+  const size = h("select", { class: "select", style: { width: "auto" }, title: "每页显示多少张",
+    onchange: () => { PAGE = +size.value; try { localStorage.setItem(PAGE_KEY, PAGE); } catch { /* 不让存就算了 */ } offset = Math.floor(offset / PAGE) * PAGE; drawMain(); } },
+    ...[60, 120, 200, 300].map((n) => h("option", { value: n, selected: n === PAGE }, `每页 ${n} 张`)));
+  return [
+    h("button", { class: "btn sm", disabled: pg <= 1, title: "第一页", onclick: () => go(1) }, "⏮ 首页"),
+    h("button", { class: "btn sm", disabled: pg <= 1, onclick: () => go(pg - 1) }, "上一页"),
+    h("span", { class: "small" }, "第"), box, h("span", { class: "small" }, `/ ${pages} 页`),
+    h("button", { class: "btn sm", onclick: () => go(+box.value) }, "跳转"),
+    h("button", { class: "btn sm", disabled: pg >= pages, onclick: () => go(pg + 1) }, "下一页"),
+    h("button", { class: "btn sm", disabled: pg >= pages, title: "最后一页", onclick: () => go(pages) }, "末页 ⏭"),
+    h("span", { class: "small muted" }, total ? `第 ${offset + 1}–${Math.min(offset + PAGE, total)} 张 / 共 ${total}` : ""),
+    size,
+    h("span", { class: "tiny muted" }, "单击选中，双击看大图（滚轮缩放、拖动、← → 切换）")];
 }
 // ── 看大图：默认适配窗口；滚轮以鼠标为中心缩放；拖动看细节；← → 切换（到页尾自动翻页）；空格选中；先显示预览再换成原图 ──
 let LIST = [], LIST_PAGED = false, LIST_TOTAL = 0;
@@ -392,8 +471,8 @@ function viewer(startPath) {
     let i = idx + d;
     if (i >= 0 && i < LIST.length) return show(i);
     if (!LIST_PAGED) return;
-    if (d > 0 && offset + LIST.length < LIST_TOTAL) { offset += 60; await drawMain(); show(0); }
-    else if (d < 0 && offset > 0) { offset = Math.max(0, offset - 60); await drawMain(); show(LIST.length - 1); }
+    if (d > 0 && offset + LIST.length < LIST_TOTAL) { offset += PAGE; await drawMain(); show(0); }
+    else if (d < 0 && offset > 0) { offset = Math.max(0, offset - PAGE); await drawMain(); show(LIST.length - 1); }
   }
   function removeCurrent() {   // 删除后列表已刷新（删掉的那张不在了）：原位置上就是下一张
     if (!LIST.length) return close();
@@ -582,7 +661,7 @@ function purgeDlg(paths) {
     } }]);
 }
 async function drawTrash(main) {
-  const d = await api(`/api/types/trash?offset=${offset}&limit=60`);
+  const d = await api(`/api/types/trash?offset=${offset}&limit=${PAGE}`);
   const count = h("span", { class: "small muted" }, `已选 ${sel.size}`);
   const need = (f) => () => { if (!sel.size) return UI.toast("先点选照片（可多选）", true); f([...sel]); };
   const bar = h("div", { class: "bar" },
@@ -609,11 +688,7 @@ async function drawTrash(main) {
     };
     return cell;
   }) : [h("div", { class: "empty" }, "回收站是空的")]));
-  main.replaceChildren(bar, grid, h("div", { class: "row", style: { marginTop: "12px" } },
-    h("button", { class: "btn sm", disabled: !offset, onclick: () => { offset = Math.max(0, offset - 60); drawMain(); } }, "上一页"),
-    h("span", { class: "small muted" }, d.total ? `第 ${offset + 1}–${Math.min(offset + 60, d.total)} 张 / 共 ${d.total}` : ""),
-    h("button", { class: "btn sm", disabled: offset + 60 >= d.total, onclick: () => { offset += 60; drawMain(); } }, "下一页"),
-    h("span", { class: "tiny muted" }, "单击选中，双击看大图（滚轮缩放、拖动、← → 切换）")));
+  main.replaceChildren(bar, grid, h("div", { class: "row", style: { marginTop: "12px", flexWrap: "wrap" } }, ...pager(d.total)));
 }
 
 (async () => {

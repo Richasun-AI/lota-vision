@@ -187,16 +187,11 @@ def _fmt_ts(t):
 def _merge_one(M, S, add_conf):
     """把图库 S 的类型、样板、删除记录、特征索引并进 M；S 的照片原地不动，M 改为同时管理 S 的目录"""
     import numpy as np
-    import yaml
-    # 1) 类型：同名的并成一类；代号撞了但名字不同的换个代号
+    # 1) 类型：同名的并成一类；代号撞了但名字不同的换个代号（主图库删掉过的代号也不复用）
     mtax = dict(M.taxonomy)
+    taken = set(mtax) | set(M._removed_types())
     by_name = {v.get("name"): k for k, v in mtax.items()}
-    kmap, added = {BIN: BIN}, []
-    doc = (yaml.safe_load(M.custom_yaml.read_text(encoding="utf-8")) or {}) if M.custom_yaml.is_file() else {}
-    wrapped = isinstance(doc, dict) and "photo_types" in doc
-    custom = (doc.setdefault("photo_types", {}) or {}) if wrapped else doc
-    if wrapped:
-        doc["photo_types"] = custom
+    kmap, new = {BIN: BIN}, {}
     for k, v in S.taxonomy.items():
         if k == BIN:
             continue
@@ -204,17 +199,16 @@ def _merge_one(M, S, add_conf):
             kmap[k] = by_name[v["name"]]
             continue
         nk, n = k, 1
-        while nk in mtax:
+        while nk in taken:
             n += 1
             nk = f"{k}_{n}"
-        mtax[nk] = custom[nk] = {**v, "source": f"合并自图库“{S.name}”", "added": time.strftime("%Y-%m-%d %H:%M")}
+        taken.add(nk)
+        new[nk] = {**v, "source": f"合并自图库“{S.name}”", "added": time.strftime("%Y-%m-%d %H:%M")}
         by_name[v.get("name")] = nk
         kmap[k] = nk
-        added.append(v.get("name") or nk)
-    if added:
-        M.custom_yaml.parent.mkdir(parents=True, exist_ok=True)
-        M.custom_yaml.write_text(f"# 图库“{M.name}”网页上新增 / 合并进来的照片类型\n"
-                                 + yaml.safe_dump(doc if wrapped else custom, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    added = [v.get("name") or k for k, v in new.items()]
+    if new:
+        M._write_custom(lambda c: c.update(new))
     prompts = S.clip_prompts()
     if prompts:
         mp = M.clip_prompts()
@@ -511,6 +505,7 @@ class Library:
             if self.custom_yaml.is_file():
                 custom = yaml.safe_load(self.custom_yaml.read_text(encoding="utf-8")) or {}
                 t.update(custom.get("photo_types", custom) if isinstance(custom, dict) else {})
+            t = {k: v for k, v in t.items() if isinstance(v, dict) and not v.get("removed")}   # 网页上删除 / 并入别类的
             other = t.pop(BIN, None) or {"name": "其他/无关", "name_en": "Other / Unrelated"}
             t[BIN] = other                  # 临时仓库总在最后
             return t
@@ -529,30 +524,161 @@ class Library:
         tax = self.taxonomy
         if any(v.get("name") == name for v in tax.values()):
             raise ValueError(f"已经有同名类型：{name}")
+        taken = set(tax) | set(self._removed_types())     # 删掉的代号不复用，免得旧的弱标签对到新类型上
         if not key:
             key = re.sub(r"[^a-z0-9_]+", "_", name_en.lower()).strip("_")[:30]
-            if not re.fullmatch(r"[a-z][a-z0-9_]{1,30}", key or "") or key in tax:
+            if not re.fullmatch(r"[a-z][a-z0-9_]{1,30}", key or "") or key in taken:
                 n = 1
-                while f"custom_{n}" in tax:
+                while f"custom_{n}" in taken:
                     n += 1
                 key = f"custom_{n}"
         if not re.fullmatch(r"[a-z][a-z0-9_]{1,30}", key):
             raise ValueError("英文代号只能用小写字母、数字、下划线，并以字母开头（如 generator）")
-        if key in tax:
-            raise ValueError(f"英文代号已存在：{key}")
-        with self.lock:
-            custom = (yaml.safe_load(self.custom_yaml.read_text(encoding="utf-8")) or {}) if self.custom_yaml.is_file() else {}
-            custom[key] = {"name": name, "name_en": name_en, "devices": {}, "must_have": must_have or [],
-                           "anomalies": anomalies, "anomalies_en": anomalies_en or [""] * len(anomalies),
-                           "added": time.strftime("%Y-%m-%d %H:%M"), "source": "网页新增"}
-            self.custom_yaml.parent.mkdir(parents=True, exist_ok=True)
-            self.custom_yaml.write_text(f"# 图库“{self.name}”网页上新增的照片类型\n"
-                                        + yaml.safe_dump(custom, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        if key in taken:
+            raise ValueError(f"英文代号已存在（或曾经用过）：{key}")
+        self._write_custom(lambda c: c.__setitem__(key, {
+            "name": name, "name_en": name_en, "devices": {}, "must_have": must_have or [],
+            "anomalies": anomalies, "anomalies_en": anomalies_en or [""] * len(anomalies),
+            "added": time.strftime("%Y-%m-%d %H:%M"), "source": "网页新增"}))
         return {"key": key, "message": f"已新增照片类型：{name} / {name_en}（{key}）"}
+
+    # 本图库自己的类型清单（custom_yaml）：可能是 {代号: …}，也可能包在 photo_types 下面；内置清单（base_yaml）从不改
+    def _read_custom(self):
+        import yaml
+        doc = (yaml.safe_load(self.custom_yaml.read_text(encoding="utf-8")) or {}) if self.custom_yaml.is_file() else {}
+        if not isinstance(doc, dict):
+            doc = {}
+        wrapped = "photo_types" in doc
+        if wrapped and not isinstance(doc["photo_types"], dict):
+            doc["photo_types"] = {}
+        return doc, (doc["photo_types"] if wrapped else doc)
+
+    def _write_custom(self, mutate):
+        import yaml
+        with self.lock:
+            doc, custom = self._read_custom()
+            mutate(custom)
+            self.custom_yaml.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.custom_yaml.with_suffix(".tmp")
+            tmp.write_text(f"# 图库“{self.name}”网页上新增 / 修改的照片类型（removed: true = 已删除或并入别类）\n"
+                           + yaml.safe_dump(doc, allow_unicode=True, sort_keys=False), encoding="utf-8")
+            os.replace(tmp, self.custom_yaml)
+
+    def _removed_types(self):
+        """→ {已删除的代号: 并入的代号或 None}；并入链（A→B→C）一直走到底"""
+        _, custom = self._read_custom()
+        rm = {k: v.get("merged_into") for k, v in custom.items() if isinstance(v, dict) and v.get("removed")}
+        out = {}
+        for k in rm:
+            t, seen = rm[k], {k}
+            while t in rm and t not in seen:
+                seen.add(t)
+                t = rm[t]
+            out[k] = t
+        return out
 
     def clip_prompts(self):
         f = self.work / "clip_prompts.json"
         return json.loads(f.read_text(encoding="utf-8")) if f.is_file() else {}
+
+    def _save_prompts(self, prompts):
+        f = self.work / "clip_prompts.json"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps(prompts, ensure_ascii=False, indent=1), encoding="utf-8")
+
+    # ── 编辑 / 并入 / 删除类型 ──
+    def _check_editable(self, key):
+        if key == BIN:
+            raise ValueError("临时仓库不能编辑、并入或删除")
+        if key not in self.taxonomy:
+            raise ValueError(f"没有这个照片类型：{key}")
+        if self.job["running"]:
+            raise ValueError("正在建索引或训练，等它跑完再改类型")
+
+    def edit_type(self, key, name, name_en, prompt=None, must_have=None, anomalies=None, anomalies_en=None):
+        """改中文名 / 英文名 / 英文描述（零样本兜底用）/ 必拍内容 / 常见异常。代号不变，样板和归类结果都不动"""
+        self._check_editable(key)
+        name, name_en = (name or "").strip(), (name_en or "").strip()
+        if not name or not name_en:
+            raise ValueError("中文名、英文名都要填")
+        tax = self.taxonomy
+        if any(v.get("name") == name for k, v in tax.items() if k != key):
+            raise ValueError(f"已经有同名类型：{name}")
+        old = tax[key]
+        entry = {**old, "name": name, "name_en": name_en, "edited": time.strftime("%Y-%m-%d %H:%M")}
+        if must_have is not None:
+            entry["must_have"] = must_have
+        if anomalies is not None:
+            anomalies_en = anomalies_en or []
+            if anomalies_en and len(anomalies_en) != len(anomalies):
+                raise ValueError(f"常见异常的中文 {len(anomalies)} 项、英文 {len(anomalies_en)} 项，数量要一一对应")
+            entry["anomalies"], entry["anomalies_en"] = anomalies, anomalies_en or [""] * len(anomalies)
+        self._write_custom(lambda c: c.__setitem__(key, entry))
+        changed_prompt = False
+        if prompt is not None:
+            ps = self.clip_prompts()
+            if (ps.get(key) or "") != prompt.strip():
+                changed_prompt = True
+                if prompt.strip():
+                    ps[key] = prompt.strip()
+                else:
+                    ps.pop(key, None)
+                self._save_prompts(ps)
+        _append(self.work / "type_edit_log.jsonl", {"action": "edit", "key": key, "old": {"name": old.get("name"), "name_en": old.get("name_en")},
+                                                    "new": {"name": name, "name_en": name_en}, "prompt_changed": changed_prompt, "ts": _now()})
+        msg = f"已保存类型：{name} / {name_en}"
+        if changed_prompt:
+            msg += "；英文描述改了，重新训练后零样本兜底才按新描述走"
+        return {"key": key, "message": msg}
+
+    def remove_type(self, key, dest, merge=False):
+        """并入（merge=True）：本类的样板全部改成 dest，旧的弱标签也算 dest，类型删掉。
+        删除：本类的样板改到 dest（临时仓库或别的类型），类型删掉。两种都会自动重新训练"""
+        self._check_editable(key)
+        tax = self.taxonomy
+        dest = dest or BIN
+        if dest not in tax or dest == key:
+            raise ValueError("请选一个别的类型" if dest == key else f"没有这个照片类型：{dest}")
+        if merge and dest == BIN:
+            raise ValueError("要并入的是一个照片类型；想把样板放进临时仓库请用“删除”")
+        name, dname = tax[key].get("name", key), tax[dest].get("name", dest)
+        moved = [p for p, t in self.confirmed_labels().items() if t == key]
+        if moved:
+            self.save_type_labels([(p, dest) for p in moved], source=f"类型“{name}”{'并入' if merge else '删除，样板改到'}“{dname}”")
+        # 现有归类结果也跟着改，页面上马上能看到；保持 pred.json 的修改时间，免得影响“临时仓库里的图按新预测走”的判断
+        if self.pred_file.is_file():
+            st = self.pred_file.stat()
+            pred = self.load_pred()
+            to, ms = dest if merge else BIN, set(moved)
+            new = {}
+            for p, v in pred.items():
+                v = list(v)
+                if v[0] == key:
+                    v[0] = dest if p in ms else to
+                if len(v) > 2 and v[2] == key:
+                    v[2] = dest if merge else ""
+                new[p] = v
+            tmp = self.pred_file.with_suffix(".tmp")
+            tmp.write_text(json.dumps(new, ensure_ascii=False), encoding="utf-8")
+            os.replace(tmp, self.pred_file)
+            os.utime(self.pred_file, ns=(st.st_atime_ns, st.st_mtime_ns))
+        self._write_custom(lambda c: c.__setitem__(key, {"name": name, "name_en": tax[key].get("name_en", ""), "removed": True,
+                                                          "merged_into": dest if merge else None,
+                                                          "removed_at": time.strftime("%Y-%m-%d %H:%M")}))
+        ps = self.clip_prompts()
+        if key in ps:
+            ps.pop(key)
+            self._save_prompts(ps)
+        _append(self.work / "type_edit_log.jsonl", {"action": "merge" if merge else "delete", "key": key, "name": name,
+                                                    "dest": dest, "samples": len(moved), "ts": _now()})
+        msg = (f"已把“{name}”并入“{dname}”：样板 {len(moved)} 张改过去" if merge
+               else f"已删除类型“{name}”：样板 {len(moved)} 张改到“{dname}”")
+        try:
+            self.start_job("train")
+            msg += "；正在重新训练归类"
+        except ValueError as e:
+            msg += f"；没能自动训练（{e}），稍后手动点“重新训练并归类全部”"
+        return {"key": key, "dest": dest, "moved": len(moved), "message": msg}
 
     # ── 删除记录、位置表、旧流水线的人工更正和 qwen 结果 ──
     def load_deleted(self):
@@ -764,10 +890,12 @@ class Library:
         allc = self.confirmed_labels()
         human = {p: t for p, t in allc.items() if t != BIN}
         tax, dl, weak = self.taxonomy, self.load_deleted(), {}
+        alias = self._removed_types()               # 并入别类的旧代号 → 新代号；删掉的 → None（不用）
         for p, d in self.load_results().items():
             if d.get("error") or p in dl or p in allc:
                 continue
             t = (d.get("vlm") or {}).get("photo_type")
+            t = alias.get(t, t)
             if t in tax and t != BIN:
                 weak[p] = t
         return human, weak

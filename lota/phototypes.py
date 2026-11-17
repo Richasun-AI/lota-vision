@@ -27,9 +27,11 @@ def summary(lib=""):
             confirmed[t] = confirmed.get(t, 0) + 1
         elif (pred.get(p) or [None, 1.0])[1] < 0.5:
             low[t] = low.get(t, 0) + 1
-    types = []
+    types, prompts = [], L.clip_prompts()
     for k, v in L.taxonomy.items():
-        types.append({"key": k, "name": v.get("name", k), "name_en": v.get("name_en", ""), "count": counts.get(k, 0),
+        types.append({"key": k, "name": v.get("name", k), "name_en": v.get("name_en", ""), "prompt": prompts.get(k, ""),
+                      "must_have": v.get("must_have") or [], "anomalies": v.get("anomalies") or [], "anomalies_en": v.get("anomalies_en") or [],
+                      "count": counts.get(k, 0),
                       "confirmed": confirmed.get(k, 0), "low": low.get(k, 0), "suggested": suggested.get(k, 0), "bin": k == imagelib.BIN})
     types.sort(key=lambda x: (x["bin"], -x["count"]))
     r = L.report()
@@ -152,6 +154,19 @@ def register_routes(router, engine, directory):
         split = lambda v: [x.strip() for x in (v if isinstance(v, list) else str(v or "").replace("，", ",").split(",")) if x.strip()]
         return guard(add_type, lib, payload.get("name", ""), payload.get("name_en", ""), payload.get("key", ""),
                      split(payload.get("must_have")), split(payload.get("anomalies")), split(payload.get("anomalies_en")))
+
+    @router.post("/types/edit", tags=["types"])
+    def type_edit(payload: dict = Body(...), lib: str = ""):
+        """改类型的中英文名、英文描述（零样本兜底用）、必拍内容、常见异常；代号不变，样板不动"""
+        split = lambda v: None if v is None else [x.strip() for x in (v if isinstance(v, list) else str(v).replace("，", ",").split(",")) if x.strip()]
+        return guard(lambda: imagelib.get(lib).edit_type(
+            payload.get("key", ""), payload.get("name", ""), payload.get("name_en", ""), payload.get("prompt"),
+            split(payload.get("must_have")), split(payload.get("anomalies")), split(payload.get("anomalies_en"))))
+
+    @router.post("/types/remove", tags=["types"])
+    def type_remove(payload: dict = Body(...), lib: str = ""):
+        """merge=true：把 key 并入 dest（样板全改过去，类型删掉）；否则删除 key，样板改到 dest（默认临时仓库）。完了自动重新训练"""
+        return guard(lambda: imagelib.get(lib).remove_type(payload.get("key", ""), payload.get("dest") or imagelib.BIN, bool(payload.get("merge"))))
 
     @router.get("/types/{ptype}/images", tags=["types"])
     def type_images(ptype: str, view: str = "all", offset: int = 0, limit: int = 60, lib: str = ""):
