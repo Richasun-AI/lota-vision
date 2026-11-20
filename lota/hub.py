@@ -450,7 +450,7 @@ def suggestions(pid, cfg, s, ls, pipes, ms):
 
 
 def register_overview(router, engine, directory):
-    from fastapi import Body
+    from fastapi import Body, HTTPException
 
     @router.get("/projects/{project_id}/hub/guideline", tags=["hub"])
     def get_guideline(project_id: str):
@@ -500,6 +500,25 @@ def register_overview(router, engine, directory):
         conf = engine.store.project(project_id)["config"]
         public = load_settings(d)["label_studio"].get("public_url") or ""
         return review_items(d, conf.get("task", "detect"), conf.get("classes") or [], public)
+
+    @router.post("/projects/{project_id}/hub/review-tab", tags=["hub"])
+    def project_review_tab(project_id: str, payload: dict = Body(...)):
+        """在 Label Studio 里建一个标签页，只显示“收不进来的标注”里某一组（kind）的任务。后台跑，GET 同一地址看进度"""
+        from .flow import REVIEW_TAB_TITLES, review_tab_start
+        kind = payload.get("kind", "")
+        if kind not in REVIEW_TAB_TITLES:
+            raise HTTPException(400, f"没有这个分组：{kind}")
+        d = directory(project_id)
+        conf = engine.store.project(project_id)["config"]
+        if not (conf.get("label_studio") or {}).get("project_id"):
+            raise HTTPException(400, "还没连接 Label Studio")
+        public = load_settings(d)["label_studio"].get("public_url") or ""
+        return review_tab_start(d, conf.get("label_studio"), conf.get("task", "detect"), conf.get("classes") or [], kind, public)
+
+    @router.get("/projects/{project_id}/hub/review-tab", tags=["hub"])
+    def project_review_tab_status(project_id: str, kind: str = ""):
+        from .flow import review_tab_status
+        return review_tab_status(directory(project_id), kind)
 
     @router.get("/overview", tags=["hub"])
     def overview():

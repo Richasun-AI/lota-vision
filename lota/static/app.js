@@ -1084,7 +1084,26 @@ async function reviewItemsPanel(project,runAndRefresh){
             ...it.links.filter((l)=>l.url).map((l)=>h("a",{href:l.url,target:"_blank",rel:"noopener",class:"small"},"LS #"+l.task+" ↗")))));
     }));
     const ids=[...picked],all=shown.map((it)=>it.image_id),use=ids.length?ids:all,label=ids.length?"所选 "+ids.length+" 张":"这一组 "+all.length+" 张";
+    const lsTab=async(ev)=>{   // 后台给任务打标记（几百个要一两分钟），按钮上显示进度；完了再打开 Label Studio
+      const btn=ev?.currentTarget,kind=filter,url=pathFor(project)+"/hub/review-tab";
+      const w=window.open("about:blank","_blank");   // 先开窗口再填地址，免得被浏览器当弹窗拦掉
+      if(w)w.document.write("<p style='font:15px sans-serif;padding:24px'>正在准备 Label Studio 标签页，几百个任务要一两分钟，请稍候…</p>");
+      const old=btn?.textContent;if(btn)btn.disabled=true;
+      try{
+        let j=await request(url,"POST",{kind});
+        while(j.running){
+          if(btn)btn.textContent=j.total?`准备中 ${j.done}/${j.total}…`:"准备中…";
+          await new Promise((r)=>setTimeout(r,1500));
+          j=await request(url+"?kind="+encodeURIComponent(kind));
+        }
+        if(j.error)throw new Error(j.error);
+        notifyUser(j.result.message);
+        if(w&&j.result.url)w.location=j.result.url;else{if(w)w.close();if(j.result.url)window.open(j.result.url,"_blank");}
+      }catch(e){if(w)w.close();notifyUser(e.message,true);}
+      finally{if(btn){btn.disabled=false;btn.textContent=old;}}
+    };
     bar.replaceChildren(
+      button("在 Label Studio 里只看这一组 ↗",lsTab,"primary"),
       button(picked.size===shown.length?"取消全选":"全选这一组",()=>{if(picked.size===shown.length)picked.clear();else all.forEach((i)=>picked.add(i));draw();},"small"),
       filter==="rotated"?button("斜框转正（"+label+"）",runAndRefresh("labels.straighten",{image_ids:use},"斜框转正"),"primary"):"",
       filter==="stale"||filter==="class"||filter==="coverage"?button("送回 Label Studio 复核",()=>toolDialog("labels.rereview"),filter==="stale"?"primary":""):"");

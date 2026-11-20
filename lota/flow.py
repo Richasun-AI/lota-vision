@@ -660,6 +660,84 @@ def review_items(directory, task, classes, public_url=""):
     return sorted(out, key=lambda r: (order.get(r["kind"], 9), r["image_id"]))
 
 
+REVIEW_TAB_TITLES = {"rotated": "LOTA·框是斜的", "class": "LOTA·类别名对不上", "coverage": "LOTA·没选确认选项",
+                     "conflict": "LOTA·标注不一致", "geometry": "LOTA·框有问题", "unsure": "LOTA·拿不准",
+                     "stale": "LOTA·加类别前的旧标注", "other": "LOTA·其他问题"}
+
+
+_TAB_JOBS = {}
+
+
+def review_tab_start(directory, ls_cfg, task, classes, kind, public_url=""):
+    """后台跑 review_tab（几百个任务要逐个改，要一两分钟，网页请求等不了这么久）；再调一次看进度 / 结果"""
+    import threading
+    key = (str(directory), kind)
+    j = _TAB_JOBS.get(key)
+    if j and j["running"]:
+        return j
+    j = _TAB_JOBS[key] = {"running": True, "done": 0, "total": 0, "result": None, "error": None}
+
+    def run():
+        try:
+            j["result"] = review_tab(directory, ls_cfg, task, classes, kind, public_url, progress=j)
+        except Exception as e:
+            j["error"] = str(e)
+        finally:
+            j["running"] = False
+    threading.Thread(target=run, daemon=True).start()
+    return j
+
+
+def review_tab_status(directory, kind):
+    return _TAB_JOBS.get((str(directory), kind)) or {"running": False, "result": None, "error": None}
+
+
+def review_tab(directory, ls_cfg, task, classes, kind, public_url="", progress=None):
+    """在 Label Studio 里建（或刷新）一个标签页，只显示“收不进来的标注”里这一组的任务，方便在 LS 里批量看、批量改。
+    做法：给这些任务的 data 加一个字段 lota_check=<分组>（其他字段原样不动），标签页按这个字段筛选；
+    已经改好、不在这一组里的任务把字段去掉，再点一次就是最新的清单。"""
+    if kind not in REVIEW_TAB_TITLES:
+        raise ValueError(f"没有这个分组：{kind}")
+    if not ls_cfg or not ls_cfg.get("project_id"):
+        raise ValueError("还没连接 Label Studio")
+    client, pid = _ls_client(ls_cfg), ls_cfg["project_id"]
+    want = {int(l["task"]) for it in review_items(directory, task, classes) if it["kind"] == kind
+            for l in it["links"] if str(l.get("project")) == str(pid)}
+    progress = progress if progress is not None else {}
+    changes = []
+    for t in client.list_tasks(pid):
+        data = t.get("data") or {}
+        has, should = data.get("lota_check") == kind, t.get("id") in want
+        if has != should:
+            new = {k: v for k, v in data.items() if k != "lota_check"}
+            if should:
+                new["lota_check"] = kind
+            changes.append((t["id"], new, should))
+    progress.update(total=len(changes), done=0)
+    added = removed = 0
+    for tid, new, should in changes:          # 逐个改（Label Studio 用 SQLite 时并发写会锁库）
+        client._request("PATCH", f"/api/tasks/{tid}/", payload={"data": new})
+        added, removed = added + should, removed + (not should)
+        progress["done"] = added + removed
+    title = REVIEW_TAB_TITLES[kind]
+    views = client._request("GET", "/api/dm/views/", query={"project": pid}) or []
+    view = next((v for v in views if (v.get("data") or {}).get("title") == title), None)
+    items = [{"filter": "filter:tasks:data.lota_check", "operator": "equal", "type": "String", "value": kind}]
+    if kind == "coverage":   # 在 LS 里选了确认选项并点 Update 保存的，马上从这个标签页消失，不用等回收
+        items += [{"filter": "filter:tasks:annotations_results", "operator": "not_contains", "type": "String", "value": v}
+                  for v in ("Targets reviewed", "No target", "Unsure")]
+    data = {"title": title, "filters": {"conjunction": "and", "items": items}}
+    if view:
+        client._request("PATCH", f"/api/dm/views/{view['id']}/", payload={"project": pid, "data": {**(view.get("data") or {}), **data}})
+    else:
+        view = client._request("POST", "/api/dm/views/", payload={"project": pid, "data": data})
+    base = (public_url or ls_cfg.get("base_url") or "").rstrip("/")
+    return {"tasks": len(want), "added": added, "removed": removed, "title": title,
+            "url": f"{base}/projects/{pid}/data?tab={view['id']}" if base and view.get("id") else "",
+            "message": f"Label Studio 里的“{title}”标签页现在有 {len(want)} 个任务"
+                       + (f"（新加 {added}，去掉已改好的 {removed}）" if added or removed else "")}
+
+
 class Straighten(Selection):
     max_angle: float = Field(default=45, ge=0, le=90)   # 超过这个角度的斜框不自动转（转出来背景太多），留给人重画
 

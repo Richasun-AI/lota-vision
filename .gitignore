@@ -31,3 +31,6 @@ mcp/ailabel_mcp.py
 # ── 私有扩展：业务专用模板、管线、提示词、标准照片类型（不进仓库）──
 private/
 lota/static/standard_categories.json
+
+# ── 本机工具运行状态 ──
+.claude-flow/
