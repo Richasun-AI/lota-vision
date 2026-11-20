@@ -579,6 +579,13 @@ def ls_webhook(c, enabled=True, engine_url="http://127.0.0.1:8795"):
     from .tasks import project_id_of, require_label_studio, task_id_of
     cfg = require_label_studio(c)
     cli = LabelStudioClient.from_config(cfg)
+    try:   # 项目在 Label Studio 里被删了的话，下面查 webhook 会得到看不懂的 HTTP 400（Select a valid choice）
+        cli._request("GET", f"/api/projects/{cfg['project_id']}")
+    except RuntimeError as e:
+        if "HTTP 404" in str(e):
+            raise ValueError(f"绑定的 Label Studio 项目 #{cfg['project_id']} 已经在 Label Studio 里删掉了："
+                             "先“提交所选图片”（会自动重建并绑定），或在标注系统页另建项目，再开启自动回收") from e
+        raise
     pid, task_id = project_id_of(c), task_id_of(c)
     url = f"{engine_url.rstrip('/')}/api/hooks/label-studio?project={pid}" + (f"&annotation_task={quote(task_id)}" if task_id else "")
     existing = [w for w in (cli._request("GET", "/api/webhooks", query={"project": cfg["project_id"]}) or [])

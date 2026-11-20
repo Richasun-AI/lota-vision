@@ -26,6 +26,7 @@ TASK_ITEMS = ("annotations", "datasets", "models", "runs", "predictions", "inspe
 TEXT_SUFFIXES = {".json", ".yaml", ".yml", ".txt", ".csv", ".md"}
 LINK_MIN_BYTES = 1 << 20      # 1MB 以上、又不是数据库 / 文本的文件用硬链接
 SPECIAL_TOOLS = ("labels.", "dataset.", "model.")
+HOOK_ACTIONS = ("ANNOTATION_CREATED", "ANNOTATION_UPDATED", "ANNOTATIONS_DELETED")   # 和 hub.ls_webhook 登记的一样
 
 
 def _busy(store, project_id):
@@ -249,8 +250,12 @@ def _ls_rebind(scenario_ls, a_raw: Path, a_id: str, b_id: str, task_code: str, r
             url = str(w.get("url", ""))
             if "/api/hooks/label-studio" in url and f"project={b_id}" in url:
                 base = url.split("?")[0]
+                # 只传 url 的话，Label Studio（1.23）会把触发动作清空，webhook 就再也不触发了：原来的动作一起带上
                 cli._request("PATCH", f"/api/webhooks/{w['id']}",
-                             payload={"url": f"{base}?project={a_id}&annotation_task={quote(task_code)}"})
+                             payload={"url": f"{base}?project={a_id}&annotation_task={quote(task_code)}",
+                                      "actions": w.get("actions") or list(HOOK_ACTIONS),
+                                      "send_for_all_actions": bool(w.get("send_for_all_actions")),
+                                      "send_payload": bool(w.get("send_payload")), "is_active": w.get("is_active", True)})
                 out["webhooks_updated"] += 1
     except Exception as e:   # Label Studio 连不上不挡合并：报告里提示，之后在任务里重新“连接 Label Studio”即可
         out["warning"] = f"Label Studio 没改成：{str(e)[:200]}"
