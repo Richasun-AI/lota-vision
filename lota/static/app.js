@@ -1174,6 +1174,36 @@ async function reviewItemsPanel(project,runAndRefresh){
     filter==="rotated"||counts.rotated?h("p",{class:"small muted"},"斜框转正：把斜框改成刚好包住它的水平框（直接改 Label Studio 里的标注，然后自动回收）。角度大于 45° 的不自动转，请在 Label Studio 里重画。"):"",
     tabs,bar,grid);
 }
+// 旧标注认定不含新加的类别：先预览（哪些旧标签表、少了哪些类别、多少张），确认后记下认定并回收
+async function ackNewClassesDialog(project,withTask){
+  const run=async(dryRun)=>{
+    const job=await request(pathFor(project)+"/tools/labels.ack_new_classes","POST",withTask({dry_run:dryRun}));
+    const done=await waitJob(project,job,120);
+    if(!done)throw new Error("还在处理，稍后到任务记录里看结果");
+    return done.outputs?.result||{};
+  };
+  const body=h("div",{},empty("正在找旧标签表…"));
+  openDialog("旧标注认定不含新加的类别",body,true);
+  let r;
+  try{r=await run(true);}catch(e){body.replaceChildren(h("p",{class:"error"},e.message));return;}
+  const todo=(r.old_schemas||[]).filter((o)=>!o.already);
+  if(!todo.length){body.replaceChildren(h("p",{},(r.old_schemas||[]).length?"旧标签表都已经认定过了。":"没有旧标签表：所有标注都是按现在的标签标的。"));return;}
+  const go=button("确认认定并回收",asyncClick(async()=>{
+    if(!confirm("认定后，这些旧标注直接当作“图里没有新加的类别”进数据集。\n如果旧图里其实有这些类别，模型会学成“这不是目标”。确定？"))return;
+    go.disabled=true;body.append(empty("正在认定并回收…"));
+    try{const x=await run(false);notifyUser("已认定 "+(x.acknowledged||0)+" 套旧标签表"+(x.pull?"，回收通过 "+(x.pull.accepted||0)+" 张":""));dialog.close();refresh("labels");}
+    catch(e){notifyUser(e.message,true);go.disabled=false;}
+  }),"primary");
+  body.replaceChildren(
+    h("p",{},"现在的标签："+(r.classes||[]).join("、")),
+    h("ul",{},...todo.map((o)=>h("li",{},"按旧标签（"+o.classes.join("、")+"）标的："+o.annotations+" 张已回收、Label Studio 里 "+o.label_studio_tasks+" 个任务；当时没找过 ",
+      h("strong",{},o.new_classes.join("、"))))),
+    h("p",{},"确定这些旧图里都没有 "+[...new Set(todo.flatMap((o)=>o.new_classes))].join("、")+" 时，可以直接认定，旧标注和新标注一起打包训练；"+
+      "不确定就用“送回 Label Studio 复核”，把旧图带着原来的框送回去补画。"),
+    h("p",{class:"small muted"},"以后再加新标签，标签表又变了，需要再认定一次（每次都要你判断旧图里有没有新类别）。"),
+    h("div",{class:"actions"},go));
+}
+
 async function labelsPage(){
   const project=state.project;
   const [ls,annotations]=await Promise.all([request(pathFor(project)+"/hub/ls-status").catch(e=>({connected:false,error:e.message})),request(pathFor(project)+"/annotations")]);
@@ -1190,17 +1220,21 @@ async function labelsPage(){
   const taskDef=state.annotationTask?(project.config.annotation_tasks||{})[state.annotationTask]:null;
   const classesPanel=taskDef?panel(h("div",{class:"rail"},h("strong",{},"标签（标注任务 "+taskDef.name+"）"),button("管理标注任务",()=>annotationTaskEditor(),"small")),
     h("p",{},(taskDef.classes||[]).map((c,i)=>i+". "+c).join("　")),
-    h("p",{class:"small muted"},"这是当前标注任务的标签，在“管理标注任务”里改；Label Studio 项目、回收、送回复核都按这个任务来。")):
+    h("p",{class:"small muted"},"这是当前标注任务的标签，在“管理标注任务”里改；Label Studio 项目、回收、送回复核都按这个任务来。"),
+    h("div",{class:"actions"},button("旧标注认定不含新加的类别…",()=>ackNewClassesDialog(project,withTask),"small"))):
     panel(h("div",{class:"rail"},h("strong",{},"检测类别"),button("添加类别",()=>addClassDialog(project),"small")),
     h("p",{},(project.config.classes||[]).map((c,i)=>i+". "+c).join("　")),
-    h("p",{class:"small muted"},"一个模型可以识别多个类别，以后还能接着加。新类别只加在末尾；加了以后，以前的标注没检查过新类别，要先“送回复核”再进数据集。"));
+    h("p",{class:"small muted"},"一个模型可以识别多个类别，以后还能接着加。新类别只加在末尾；加了以后，以前的标注没检查过新类别，要先“送回复核”再进数据集。"),
+    h("div",{class:"actions"},button("旧标注认定不含新加的类别…",()=>ackNewClassesDialog(project,withTask),"small")));
   const cfg=ls.config||{},cfgBad=ls.connected&&!ls.error&&((cfg.missing_classes||[]).length||cfg.has_review_choice===false);
   const cfgPanel=cfgBad?h("section",{class:"panel callout"},h("strong",{},"Label Studio 项目 #"+ls.project_id+" 的标注配置不完整"),
     (cfg.missing_classes||[]).length?h("p",{},"缺少类别："+cfg.missing_classes.join("、")):"",
     cfg.has_review_choice===false?h("p",{},"没有 “Targets reviewed / No target” 选项：在这个项目里标的图，引擎没法确认框已画全，所以收不进来。"):"",
-    h("p",{class:"small muted"},"点下面的按钮，按现在的类别新建一个 Label Studio 项目并切换过去（自动开启自动回收）；旧项目留在 Label Studio 里不动，里面已画的框可以用“送回复核”带到新项目。"),
-    h("div",{class:"actions"},button("按现在的类别新建 Label Studio 项目",runAndRefresh("labels.ls_setup",{new:true},"新建 Label Studio 项目",
-      async()=>{await request(pathFor(project)+"/tools/labels.ls_webhook","POST",{enabled:true,engine_url:"http://127.0.0.1:8795"});await initialize(project.id);}),"primary"))):"";
+    h("p",{class:"small muted"},"加了标签：点“更新标注界面”，把新标签加进这个项目，所有图都留在一个项目里（推荐）。旧图要不要补画新类别：用“送回 Label Studio 复核”，或确定旧图里没有新类别时用“旧标注认定不含新加的类别”。"),
+    h("div",{class:"actions"},
+      button("更新 Label Studio 项目 #"+ls.project_id+" 的标注界面",runAndRefresh("labels.ls_update_config",{},"更新标注界面"),"primary"),
+      button("另建一个新项目（旧项目不动）",runAndRefresh("labels.ls_setup",{new:true},"新建 Label Studio 项目",
+        async()=>{await request(pathFor(project)+"/tools/labels.ls_webhook","POST",withTask({enabled:true,engine_url:"http://127.0.0.1:8795"}));await initialize(project.id);})))):"";
   const reviewPanel=await reviewItemsPanel(project,runAndRefresh);
   let status;
   if(!ls.connected)status=panel(h("strong",{},"Label Studio"),h("p",{},(taskDef?"标注任务“"+taskDef.name+"”":"这个子项目")+"还没连接 Label Studio。第一次“提交所选图片”时会自动按标签建项目。"));
