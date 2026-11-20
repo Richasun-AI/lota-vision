@@ -84,13 +84,52 @@ class TaskLabelStudioTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "标注任务“telecom-site-inspection”还没绑定 Label Studio"):
             orig.function(ctx)
 
+    def _fake_ls(self, existing):
+        calls = []
+
+        class FakeClient:
+            def _request(self, method, path, payload=None, query=None):
+                calls.append((method, path, payload))
+                if method == "GET" and path.startswith("/api/projects/"):
+                    if int(path.rstrip("/").split("/")[-1]) not in existing:
+                        raise RuntimeError(f"Label Studio GET {path} returned HTTP 404")
+                    return {"id": int(path.rstrip("/").split("/")[-1])}
+                return {"id": 43}
+
+        self.engine.save = self.store.save_project
+        return calls, mock.patch.object(flow, "_ls_client", lambda cfg: FakeClient())
+
     def test_task_connection_is_used_and_classes_kept(self):
         ctx = self._task_ctx(_config(task_ls={**LS, "project_id": 9}, project_ls=LS))
         ctx.scenario = ctx.scenario.model_copy(update={"label_studio": None})   # 模拟任务开始时快照里还没有连接
-        c = self._push(ctx)
+        calls, patch = self._fake_ls(existing={9})
+        with patch:
+            c = self._push(ctx)
         self.assertEqual(c.scenario.label_studio.project_id, 9)
         self.assertEqual(c.scenario.classes, ["cctv"])
         self.assertEqual(c.scenario.task, "detect")
+        self.assertEqual([m for m, *_ in calls], ["GET"])                       # 只核对，不新建
+
+    def test_deleted_project_is_recreated_and_rebound(self):
+        ctx = self._task_ctx(_config(task_ls={**LS, "project_id": 11}, project_ls=LS))
+        calls, patch = self._fake_ls(existing=set())                           # #11 在 Label Studio 里被删了
+        with patch:
+            c = self._push(ctx)
+        self.assertEqual(c.scenario.label_studio.project_id, 43)
+        self.assertEqual(c.scenario.classes, ["cctv"])
+        saved = self.store.project("telecom-inspection")["config"]
+        self.assertEqual(saved["annotation_tasks"]["telecom-site-inspection"]["label_studio"]["project_id"], 43)
+        self.assertEqual(saved["label_studio"]["project_id"], 7)
+
+    def test_other_label_studio_errors_are_not_hidden(self):
+        ctx = self._task_ctx(_config(task_ls={**LS, "project_id": 9}))
+
+        class Down:
+            def _request(self, *a, **k):
+                raise RuntimeError("Label Studio GET /api/projects/9 returned HTTP 401")
+
+        with mock.patch.object(flow, "_ls_client", lambda cfg: Down()), self.assertRaisesRegex(RuntimeError, "401"):
+            self._push(ctx)
 
 
 class AutoExtractTest(unittest.TestCase):

@@ -821,14 +821,24 @@ class PushPrelabel(Selection):
 
 
 def _ensure_ls(c):
-    """送 Label Studio 前用：当前范围（子项目或标注任务）还没连接，就自动按当前标签建一个 LS 项目并记下，以后复用。
-    地址、令牌环境变量、本地图片根目录沿用子项目已有的连接；都没有就用默认值。返回 (连接, 新建结果或 None)。"""
+    """送 Label Studio 前用：当前范围（子项目或标注任务）还没连接，就自动按当前标签建一个 LS 项目并记下，以后复用；
+    绑定的项目在 Label Studio 里被删了（404），就用同样的地址重新建一个并改绑，不再一直报“连不上”。
+    地址、令牌环境变量、本地图片根目录沿用已有连接（没有就用子项目的，再没有用默认值）。返回 (连接, 新建结果或 None)。"""
     from .tasks import live_label_studio, project_id_of
-    ls = live_label_studio(c)
+    ls, gone = live_label_studio(c), None
     if ls and ls.get("project_id"):
-        return ls, None
-    base = c.engine.store.project(project_id_of(c))["config"].get("label_studio") or {}
-    created = ls_setup(c, **{k: base[k] for k in ("base_url", "token_env", "local_files_root") if base.get(k)})
+        try:
+            _ls_client(ls)._request("GET", f"/api/projects/{ls['project_id']}")
+            return ls, None
+        except RuntimeError as e:
+            if "HTTP 404" not in str(e):   # 只有“项目不存在”才重建；连不上、令牌错等照常报错
+                raise
+        base, gone = ls, ls["project_id"]
+    else:
+        base = c.engine.store.project(project_id_of(c))["config"].get("label_studio") or {}
+    created = ls_setup(c, new=True, **{k: base[k] for k in ("base_url", "token_env", "local_files_root") if base.get(k)})
+    if gone:
+        created = {**created, "replaced_missing_project_id": gone}
     return live_label_studio(c), created
 
 
@@ -1943,13 +1953,12 @@ def _with_live_ls(tool_id):
     orig = TOOLS[tool_id]
 
     def run(c, **kw):
+        from .store import LabelStudio
+        from .tasks import require_label_studio
         created = None
-        if c.scenario.label_studio is None:
-            from .store import LabelStudio
-            from .tasks import require_label_studio
-            # 送：还没连接就自动按当前标签建 LS 项目；回收：没连接就没东西可收，照常提示
-            ls = _ensure_ls(c) if tool_id == "labels.push" else (require_label_studio(c), None)
-            ls, created = ls
+        # 送：每次都核对绑定的项目还在（没有 / 被删了就自动建）；回收：没连接就没东西可收，照常提示
+        if tool_id == "labels.push" or c.scenario.label_studio is None:
+            ls, created = _ensure_ls(c) if tool_id == "labels.push" else (require_label_studio(c), None)
             # 只补上连接，任务的标签表、类型不动（以前整个换成子项目配置，标注任务里会查错子项目、丢掉任务标签）
             c.scenario = c.scenario.model_copy(update={"label_studio": LabelStudio.model_validate(ls)})
         out = orig.function(c, **kw)
