@@ -383,6 +383,15 @@ def merge(engine, target: str, source: str, dry_run=True, task_code: str = ""):
         _place_tree(src, dst, rewrite, files)
     if (b_dir / "features").is_dir():   # 特征缓存：按内容哈希，A 没有的拿过去，省得重算
         _place_tree(b_dir / "features", a_dir / "features", lambda t: t, files)
+    # Label Studio 里 B 送过的任务打的是 B 的归属标记：记下来，任务里回收 / 查重才认得这些旧任务
+    from .labels import LS_ALIASES, _project_names
+    aliases = {task_dir: _project_names(b_dir)}
+    for t_id, new_id in sub_tasks.items():
+        aliases[a_dir / "annotation-tasks" / new_id] = _project_names(b_dir / "annotation-tasks" / t_id)
+    for folder, names in aliases.items():
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / LS_ALIASES).write_text(json.dumps(sorted(names), ensure_ascii=False), encoding="utf-8")
+    report["label_studio_aliases"] = {str(k.relative_to(a_dir)): sorted(v) for k, v in aliases.items()}
     _merge_catalog(a_dir, b_dir, False, report)
     _merge_simple_db(a_dir, b_dir, "sorting.sqlite3", False, report)
     _merge_simple_db(a_dir, b_dir, "learning.sqlite3", False, report, conflict_table="labels")

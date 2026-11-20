@@ -364,8 +364,13 @@ def _ls_client(cfg):
         return LabelStudioClient.from_config(cfg)
     except ValueError as e:
         if "unset" in str(e) or "token" in str(e).lower():
-            raise ValueError("还没配置 Label Studio 令牌：在 Label Studio 右上角头像 → Account & Settings 复制访问令牌，"
-                             "写进引擎目录的 .env（一行 LABEL_STUDIO_TOKEN=令牌），"
+            import os
+            name = (cfg or {}).get("token_env") or "LABEL_STUDIO_TOKEN"
+            if name != "LABEL_STUDIO_TOKEN" and os.environ.get("LABEL_STUDIO_TOKEN"):   # 令牌其实配了，是连接里的变量名写错了
+                raise ValueError(f"这个 Label Studio 连接读的令牌变量是 {name}，但引擎里没有这个变量（已配置的是 LABEL_STUDIO_TOKEN）："
+                                 "到“管理标注任务”选这个任务，把“令牌环境变量”改成 LABEL_STUDIO_TOKEN 保存") from e
+            raise ValueError(f"还没配置 Label Studio 令牌（变量 {name}）：在 Label Studio 右上角头像 → Account & Settings 复制访问令牌，"
+                             f"写进引擎目录的 .env（一行 {name}=令牌），"
                              "然后 bash engine.sh restart") from e
         raise
 
@@ -441,7 +446,7 @@ def rereview_candidates(directory, task, classes):
     rejected = 回收了但没通过（类别名对不上、没选 Targets reviewed 等），里面有能用的框"""
     import sqlite3
     from contextlib import closing
-    from .labels import _class_name
+    from .labels import _class_name, schema_ok
     db = Path(directory) / "annotations" / "index.sqlite3"
     if not db.is_file():
         return {}
@@ -470,7 +475,7 @@ def rereview_candidates(directory, task, classes):
                     boxes.append({"x": v["x"], "y": v["y"], "width": v["width"], "height": v["height"],
                                   "rotation": v.get("rotation", 0), "rectanglelabels": [name]})
         old_classes = (sent or {}).get("classes") or []
-        if status == "accepted" and sent and sent != schema:
+        if status == "accepted" and sent and not schema_ok(sent, task, classes, directory):   # 认定过“旧图不含新类别”的不算旧标注
             out[image_id] = ("stale", boxes, old_classes)
         elif status in ("invalid", "unlabeled") and boxes:
             out[image_id] = ("rejected", boxes, old_classes)
@@ -480,7 +485,7 @@ def rereview_candidates(directory, task, classes):
 def rereview(c, which="all", selector="", confidence=0.25, device="0", limit=1000, preselect=True, replace=False, spot_check=0.1):
     """把要重新确认的图带着已有的框送进当前 Label Studio 项目：打开就有框，补画新类别、改错框，再选 Targets reviewed 提交。
     选了模型的话，再用它给“标注时还没有的类别”预画框。已经在当前 Label Studio 项目里的图不重复送。"""
-    from .labels import _classes, _make_tasks, _project_name, _remote_tasks_by_image
+    from .labels import _classes, _make_tasks, _project_names, _remote_tasks_by_image
     from .tasks import require_label_studio
     ls = require_label_studio(c)
     task, classes = c.scenario.task, list(c.scenario.classes)
@@ -490,12 +495,12 @@ def rereview(c, which="all", selector="", confidence=0.25, device="0", limit=100
     if which != "all":
         cands = {k: v for k, v in cands.items() if v[0] == which}
     client = _ls_client(ls)
-    existing = _remote_tasks_by_image(client, ls["project_id"], _project_name(c.directory), task)
+    existing = _remote_tasks_by_image(client, ls["project_id"], _project_names(c.directory), task)
     replaced = 0
     if replace:   # 还没人标过的任务删掉重送；有标注（含跳过/取消）或草稿的不动
         from .labels import _matches_task
         untouched = {r["data"]["image_id"]: r["id"] for r in client.list_tasks(ls["project_id"])
-                     if _matches_task(r, _project_name(c.directory), task) and r["data"].get("image_id") in cands
+                     if _matches_task(r, _project_names(c.directory), task) and r["data"].get("image_id") in cands
                      and not (r.get("total_annotations") or r.get("cancelled_annotations") or r.get("annotations") or r.get("drafts"))}
         for key, remote_id in list(untouched.items())[:limit]:
             client._request("DELETE", f"/api/tasks/{remote_id}")
@@ -729,6 +734,85 @@ def confirm_reviewed(c, image_ids=None):
     return out
 
 
+# ── 加了标签以后：直接更新现在这个 Label Studio 项目的标注界面（任务都留着，不另建项目）──
+class LsUpdateConfig(Spec):
+    pass
+
+
+def ls_update_config(c):
+    """把当前 Label Studio 项目的标注界面换成现在的标签（含确认选项）。只加标签没问题；
+    删掉了已经有人用过的标签，Label Studio 会拒绝，那时要先改那些标注"""
+    from .hub import ls_config_check
+    from .labels import label_config
+    from .tasks import require_label_studio
+    ls = require_label_studio(c)
+    client = _ls_client(ls)
+    pid, task, classes = ls["project_id"], c.scenario.task, list(c.scenario.classes)
+    before = ls_config_check(client._request("GET", f"/api/projects/{pid}").get("label_config"), classes, task)
+    try:
+        client._request("PATCH", f"/api/projects/{pid}", payload={"label_config": _pose_cfg(c) or label_config(classes, task)})
+    except RuntimeError as e:
+        raise ValueError(f"Label Studio 没接受新的标注界面（{e}）：多半是删了已经有人用过的标签。只加标签不会这样") from e
+    return {"ls_project": pid, "added_classes": before.get("missing_classes") or [], "classes": classes,
+            "added_review_choice": before.get("has_review_choice") is False}
+
+
+# ── 旧标注认定不含新类别：标签表后来加了类别，旧标注当时没找过新类别。用户确定旧图里没有新类别时，认定它们在新标签表下也完整 ──
+class AckNewClasses(Spec):
+    dry_run: bool = True
+
+
+def ack_new_classes(c, dry_run=True):
+    """找出“旧标签表”（旧类别都还在、只是少了后来加的类别）；dry_run 只列出来，否则记下认定并回收"""
+    import sqlite3
+    from contextlib import closing
+    from .labels import SCHEMA_ACKS, pull_annotations, schema_acks, schema_ok
+    from .tasks import live_label_studio
+    task, classes = c.scenario.task, list(c.scenario.classes)
+    found = {}   # 旧类别清单(tuple) → 张数
+    db = Path(c.directory) / "annotations" / "index.sqlite3"
+    if db.is_file():
+        with closing(sqlite3.connect(db, timeout=10)) as conn:
+            rows = conn.execute("SELECT r.original FROM current_annotations k JOIN revisions r ON r.task=k.task AND "
+                                "r.image_id=k.image_id AND r.revision=k.revision WHERE k.task=?", (task,)).fetchall()
+        for row_no, (original,) in enumerate(rows):
+            try:
+                entries = json.loads(original)
+            except (TypeError, ValueError):
+                continue
+            for e in (entries if isinstance(entries, list) else [entries]):
+                sch = e.get("_ailabel_schema") if isinstance(e, dict) else None
+                if isinstance(sch, dict) and sch.get("task") == task and isinstance(sch.get("classes"), list):
+                    found.setdefault(tuple(sch["classes"]), set()).add(row_no)   # 按图计数（一张图一行）
+    ls = live_label_studio(c)
+    remote = {}
+    if ls and ls.get("project_id"):
+        from .labels import _matches_task, _project_names
+        names = _project_names(c.directory)
+        for r in _ls_client(ls).list_tasks(ls["project_id"]):
+            sch = (r.get("data") or {}).get("ailabel_label_schema")
+            if _matches_task(r, names, task) and isinstance(sch, dict) and isinstance(sch.get("classes"), list):
+                remote[tuple(sch["classes"])] = remote.get(tuple(sch["classes"]), 0) + 1
+    olds = []
+    for old in sorted(set(found) | set(remote)):
+        if list(old) == classes or not set(old) <= set(classes):
+            continue
+        olds.append({"classes": list(old), "new_classes": [x for x in classes if x not in old],
+                     "annotations": len(found.get(old, ())), "label_studio_tasks": remote.get(old, 0),
+                     "already": schema_ok({"task": task, "classes": list(old)}, task, classes, c.directory)})
+    out = {"task": task, "classes": classes, "old_schemas": olds, "dry_run": dry_run}
+    todo = [o for o in olds if not o["already"]]
+    if dry_run or not todo:
+        return out
+    acks = schema_acks(c.directory) + [{"task": task, "classes": o["classes"], "now": classes,
+                                        "at": time.strftime("%Y-%m-%d %H:%M:%S")} for o in todo]
+    (Path(c.directory) / SCHEMA_ACKS).write_text(json.dumps(acks, ensure_ascii=False, indent=2), encoding="utf-8")
+    out["acknowledged"] = len(todo)
+    if ls and ls.get("project_id"):
+        out["pull"] = pull_annotations(c.directory, ls, classes, task=task)
+    return out
+
+
 REVIEW_TAB_TITLES = {"rotated": "LOTA·框是斜的", "class": "LOTA·类别名对不上", "coverage": "LOTA·没选确认选项",
                      "conflict": "LOTA·标注不一致", "geometry": "LOTA·框有问题", "unsure": "LOTA·拿不准",
                      "stale": "LOTA·加类别前的旧标注", "other": "LOTA·其他问题"}
@@ -905,14 +989,14 @@ def _ensure_ls(c):
 
 def push_prelabel(c, image_ids, selector="production", confidence=0.25, device="0"):
     """把图片送进 Label Studio，并带上模型预框（打开就有框，只需删错框、补漏框、调边界，再选“Targets reviewed”）。"""
-    from .labels import LabelStudioClient, _make_tasks, _project_name, _remote_tasks_by_image
+    from .labels import LabelStudioClient, _make_tasks, _project_names, _remote_tasks_by_image
     from .models import predict
     from .tools import auto_extract
     ls, _ = _ensure_ls(c)   # 还没连接就自动建项目
     auto_extract(c, image_ids)   # 还没抽取的图先复制进子项目
     client = _ls_client(ls)
     task = c.scenario.task
-    existing = _remote_tasks_by_image(client, ls["project_id"], _project_name(c.directory), task)
+    existing = _remote_tasks_by_image(client, ls["project_id"], _project_names(c.directory), task)
     todo = [i for i in dict.fromkeys(image_ids) if i not in existing]
     if not todo:
         return {"pushed": 0, "skipped": len(image_ids), "url": f"{ls['base_url']}/projects/{ls['project_id']}"}
@@ -972,6 +1056,8 @@ TOOLS.update({
     "labels.push_prelabel": Tool("送 Label Studio（带模型预框）", PushPrelabel, push_prelabel),
     "labels.rereview": Tool("送回 Label Studio 复核（带已有的框）", Rereview, rereview),
     "labels.confirm_reviewed": Tool("批量补确认（框画了、忘选确认选项）", ConfirmReviewed, confirm_reviewed),
+    "labels.ls_update_config": Tool("更新 Label Studio 标注界面（按现在的标签）", LsUpdateConfig, ls_update_config),
+    "labels.ack_new_classes": Tool("旧标注认定不含新加的类别", AckNewClasses, ack_new_classes),
 })
 
 

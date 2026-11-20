@@ -125,6 +125,16 @@ class MergeTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "已经并入过"):
             merge(self.engine, "telecom", "weeds", dry_run=True)
         self.assertEqual(report["task_code"], "weeds")
+        # Label Studio 旧任务的归属标记：任务里认 B 原来的标记，回收 / 查重才收得到合并前的任务
+        from lota.labels import _matches_task, _project_names
+        names = _project_names(task)
+        self.assertEqual(names, {"telecom/weeds", "weeds"})
+        self.assertEqual(_project_names(self.a / "annotation-tasks" / "weeds-bars"), {"telecom/weeds-bars", "weeds/bars"})
+        old = {"data": {"ailabel_project": "weeds", "ailabel_task": "detect", "image_id": "x"}}
+        other = {"data": {"ailabel_project": "telecom", "ailabel_task": "detect", "image_id": "y"}}
+        self.assertTrue(_matches_task(old, names, "detect"))
+        self.assertFalse(_matches_task(other, names, "detect"))
+        self.assertTrue(_matches_task(old, "weeds", "detect"))                      # 单个标记的老用法照旧
 
     def test_refuses_self_and_busy(self):
         with self.assertRaisesRegex(ValueError, "并入它自己"):

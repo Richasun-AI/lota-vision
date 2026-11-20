@@ -137,6 +137,47 @@ def _project_name(project_dir):
     return source_project(directory).name+"/"+directory.name if directory.parent.name=="annotation-tasks" else directory.name
 
 
+LS_ALIASES = "label_studio_aliases.json"   # 子项目并入别处后，它在 Label Studio 里旧任务的归属标记（合并时写）
+
+
+SCHEMA_ACKS = "label_schema_ack.json"   # 用户认定“旧标签表下的标注，在现在的标签表里也完整”（旧图不含后来加的类别）
+
+
+def schema_acks(project_dir):
+    f = Path(project_dir) / SCHEMA_ACKS
+    try:
+        return [x for x in json.loads(f.read_text(encoding="utf-8")) if isinstance(x, dict)] if f.is_file() else []
+    except (ValueError, OSError):
+        return []
+
+
+def schema_ok(found, task, classes, project_dir):
+    """标注时的标签表 found 在现在（task, classes）下还算不算数：一样就算；或者用户认定过这个旧标签表
+    （只能是“后来加了类别”：旧类别都还在，认定的是旧图里没有新加的类别）"""
+    current = {"task": task, "classes": list(classes)}
+    if found == current:
+        return True
+    if not isinstance(found, dict) or found.get("task") != task or not isinstance(found.get("classes"), list):
+        return False
+    old = found["classes"]
+    if not set(old) <= set(classes):
+        return False
+    return any(a.get("task") == task and a.get("classes") == old and a.get("now") == list(classes) for a in schema_acks(project_dir))
+
+
+def _project_names(project_dir):
+    """本范围认的 Label Studio 任务归属标记：现在的标记 + 合并前的旧标记。新送的任务只打现在的标记"""
+    directory=Path(project_dir).resolve()
+    names={_project_name(directory)}
+    f=directory/LS_ALIASES
+    if f.is_file():
+        try:
+            names|={str(x) for x in json.loads(f.read_text(encoding="utf-8")) if x}
+        except (ValueError, OSError):
+            pass
+    return names
+
+
 def _image_id(value):
     if not isinstance(value, str) or re.fullmatch(r"[a-f0-9]{64}", value) is None:
         raise ValueError("Expected a lowercase SHA-256 image ID")
@@ -442,14 +483,15 @@ def import_annotations(project_dir, tasks, classes, *, task="detect"):
         try:
             if not isinstance(data, dict):
                 raise ValueError("Task data is missing")
-            if data.get("ailabel_project") not in {None, _project_name(project_dir)}:
+            if data.get("ailabel_project") not in {None, *_project_names(project_dir)}:
                 raise ValueError("Task belongs to another project")
             if data.get("ailabel_task") not in {None, task}:
                 raise ValueError("Task belongs to another annotation type")
             image_id = _image_id(data.get("image_id"))
             row, _ = _raw_image(project_dir, image_id)
             schema={"task":task,"classes":classes}
-            if data.get("ailabel_label_schema") not in (None,schema):
+            sent=data.get("ailabel_label_schema")
+            if sent is not None and not schema_ok(sent,task,classes,project_dir):
                 raise ValueError("Annotation task labels changed; review a new labeling batch")
             value=json.loads(_dump(value))
             value["_ailabel_schema"]=schema
@@ -639,7 +681,7 @@ def _collect_samples(project_dir, classes, task, require_site):
             continue
         original=json.loads(row["original"])
         exports=original if isinstance(original,list) else [original]
-        if any(not isinstance(entry,dict) or entry.get("_ailabel_schema")!={"task":task,"classes":classes} for entry in exports):
+        if any(not isinstance(entry,dict) or not schema_ok(entry.get("_ailabel_schema"),task,classes,project_dir) for entry in exports):
             excluded["label_schema_changed"] += 1
             continue
         checked=[_annotation(entry,classes,task,image) for entry in exports if isinstance(entry,dict)]
@@ -925,8 +967,10 @@ def _remote_project(config):
 
 
 def _matches_task(remote, project_name, task):
+    """project_name 可以是一个标记，也可以是一组（现在的 + 合并前的旧标记）"""
+    names = {project_name} if isinstance(project_name, str) else set(project_name)
     data = remote.get("data") if isinstance(remote, dict) else None
-    return (isinstance(data, dict) and data.get("ailabel_project") == project_name
+    return (isinstance(data, dict) and data.get("ailabel_project") in names
             and data.get("ailabel_task") == task)
 
 
@@ -954,7 +998,7 @@ def push_tasks(project_dir, label_studio, image_ids, classes, *, task="detect"):
                             local_files_root=label_studio.get("local_files_root"))
     for request in requested:
         request["data"]["ailabel_label_schema"]={"task":task,"classes":_classes(classes,task)}
-    project_name = _project_name(project_dir)
+    project_name = _project_names(project_dir)   # 查重认旧标记：合并前送过的图不重复送
     pushed, matched = 0, {}
     with closing(_connect(project_dir)) as connection, connection:
         # Serializing pushes inside the scene allows reconciliation after an uncertain POST.
@@ -999,7 +1043,7 @@ def pull_annotations(project_dir, label_studio, classes, *, task="detect"):
     project_id = _remote_project(label_studio)
     client = LabelStudioClient.from_config(label_studio)
     rows = client.export_tasks(project_id)
-    project_name = _project_name(project_dir)
+    project_name = _project_names(project_dir)   # 合并前的旧任务也收
     relevant = [row for row in rows if _matches_task(row, project_name, task)]
     summary = import_annotations(project_dir, relevant, classes, task=task)
     return summary | {"project_id": project_id, "skipped_remote": len(rows) - len(relevant)}
