@@ -64,10 +64,30 @@ async function categoryEditor(){
   notifyUser(parts.length?"从"+source+"同步："+parts.join("，")+"。左边有色条的是变动行，点“保存类别”生效"
    +(bad.length?"；代号不合规跳过："+bad.join("、"):""):"已和"+source+"一致，没有要改的");
  });
+ // 导出：按编辑器里当前看到的内容（含未保存的修改）导出 CSV（Excel 直接打开）或 JSON
+ const exportCategories=fmt=>{
+  const items=rows.map(({controls:c})=>{const code=c.code.value.trim();return{code,name:c.name.value.trim(),name_en:c.english.value.trim(),
+   description:c.description.value.trim(),enabled:c.enabled.checked,model_class:config.classes.includes(code),photos:seen.categories[code]||0};}).filter(x=>x.code);
+  const stamp=new Date().toISOString().slice(0,10),base="分拣类别_"+(config.name||project.id)+"_"+stamp;
+  let text,mime;
+  if(fmt==="json"){text=JSON.stringify({project:{id:project.id,name:config.name||""},exported_at:new Date().toISOString(),categories:items},null,2);mime="application/json";}
+  else{
+   const cell=v=>{v=v==null?"":String(v);return /[",\r\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+   text="﻿"+[["代码","中文名称","英文名称","说明","启用","训练类别","分拣照片数"],
+    ...items.map(x=>[x.code,x.name,x.name_en,x.description,x.enabled?"是":"否",x.model_class?"是":"否",x.photos])].map(r=>r.map(cell).join(",")).join("\r\n");
+   mime="text/csv";
+  }
+  const url=URL.createObjectURL(new Blob([text],{type:mime+";charset=utf-8"})),a=h("a",{href:url,download:base+"."+fmt});
+  document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);
+  notifyUser("已导出 "+items.length+" 个类别");
+ };
+ const exportPick=h("select",{class:"btn small",title:"导出编辑器里当前的类别（含未保存的修改）"},
+  h("option",{value:""},"⇩ 导出"),h("option",{value:"csv"},"CSV（Excel）"),h("option",{value:"json"},"JSON"));
+ exportPick.onchange=()=>{const f=exportPick.value;exportPick.value="";if(f)exportCategories(f);};
  body.append(h("p",{},"类别属于当前子项目场景。已有代码保持稳定，修改名称会更新图库显示；停用类别仍保留历史记录。没用过的类别可以删除；模型训练类别和已有分拣照片的类别只能停用。"),
  h("p",{class:"small muted"},"“从照片类型同步”以照片类型页的图库为准：新类型加进来，改过名的跟着改，删除或并入别类的在这里停用（不删，历史照片还在）。在照片类型页细化后，回来再点一次即可。"),
  search,h("div",{class:"actions"},button("新增类别",()=>add()),libSel||"",
- button("从照片类型同步（中英）",syncTypes,"primary")),list);
+ button("从照片类型同步（中英）",syncTypes,"primary"),exportPick),list);
  openDialog(project.config.name+" · 类别编辑器",formContent(body,"保存类别",async()=>{
   const categories={};
   for(const {controls:c} of rows){

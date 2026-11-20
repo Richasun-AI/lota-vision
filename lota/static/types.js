@@ -47,8 +47,39 @@ function libBar() {
     job.running && job.kind === "index" ? h("span", { class: "badge info idx-msg" }, "建索引中… " + (job.message || ""))
       : h("span", { class: "small" + (pending ? "" : " muted") }, pending == null ? `已索引 ${ix.indexed ?? 0} 张` : pending ? `目录里有 ${pending} 张新照片还没索引` : "索引是最新的"),
     h("button", { class: "btn sm" + (pending ? " primary" : ""), disabled: !!job.running, title: "重新扫图库目录：只给新照片算特征，目录里删掉的从索引去掉。原图目录补了新照片、初选又导出了新的之后点这个", onclick: reindex }, "↻ 更新索引"),
+    exportPick(),
     h("button", { class: "btn sm", onclick: () => newLibDlg() }, "＋ 新建图库"),
     h("button", { class: "btn sm ghost", onclick: manageLibDlg }, "管理"));
+}
+// 导出当前图库的照片类型：CSV（Excel 直接打开，UTF-8 带 BOM）或 JSON（字段与 /api/types/summary 一致，方便再导入）
+function exportPick() {
+  const sel = h("select", { class: "btn sm", title: "导出当前图库的照片类型清单（代号、中英文名、描述、必拍内容、常见异常、张数）" },
+    h("option", { value: "" }, "⇩ 导出"), h("option", { value: "csv" }, "CSV（Excel）"), h("option", { value: "json" }, "JSON"));
+  sel.onchange = () => { const f = sel.value; sel.value = ""; if (f) exportTypes(f); };
+  return sel;
+}
+function exportTypes(fmt) {
+  const L = S.lib || {}, types = (S.types || []).filter((t) => !t.bin), stamp = new Date().toISOString().slice(0, 10);
+  const name = `照片类型_${L.name || L.id || "图库"}_${stamp}`;
+  if (fmt === "json") {
+    downloadText(name + ".json", JSON.stringify({ lib: { id: L.id, name: L.name }, exported_at: new Date().toISOString(),
+      types: types.map(({ bin, ...t }) => t) }, null, 2), "application/json");
+  } else {
+    const join = (a) => (a || []).join("，");
+    const rows = [["代号", "中文名", "英文名", "英文描述", "必拍内容", "常见异常", "常见异常（英）", "照片数", "已确认", "低置信", "待确认建议"],
+      ...types.map((t) => [t.key, t.name, t.name_en, t.prompt, join(t.must_have), join(t.anomalies), join(t.anomalies_en), t.count, t.confirmed, t.low, t.suggested])];
+    downloadText(name + ".csv", toCsv(rows), "text/csv");
+  }
+  UI.toast(`已导出 ${types.length} 个照片类型`);
+}
+function toCsv(rows) {
+  const cell = (v) => { v = v == null ? "" : String(v); return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+  return "﻿" + rows.map((r) => r.map(cell).join(",")).join("\r\n");
+}
+function downloadText(filename, text, mime) {
+  const url = URL.createObjectURL(new Blob([text], { type: mime + ";charset=utf-8" }));
+  const a = h("a", { href: url, download: filename }); document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 async function reindex() {
   await api("/api/types/index", { method: "POST" });
