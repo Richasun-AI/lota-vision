@@ -668,6 +668,67 @@ def review_items(directory, task, classes, public_url=""):
     return sorted(out, key=lambda r: (order.get(r["kind"], 9), r["image_id"]))
 
 
+# ── 批量补确认：画了框（分类：选了类别）但忘了选确认选项的任务，统一补上 Targets reviewed / Category reviewed 再回收 ──
+#    只补“框画了、选项没选”这一种；没画框、或画了框却选 No target 的要人判断，不碰。跳过了逐张检查，漏框的图会直接进训练集。
+CONFIRMABLE = {"Confirm all target classes have been reviewed": "Targets reviewed",
+               "Confirm the single image category": "Category reviewed"}
+
+
+class ConfirmReviewed(Spec):
+    image_ids: list[str] = Field(default_factory=list, max_length=5000)   # 空 = “没选确认选项”这一组全部
+
+
+def confirm_reviewed(c, image_ids=None):
+    """给“没选确认选项”的标注补上确认选项（直接改 Label Studio 里的标注），然后回收"""
+    from .hub import ls_config_check
+    from .labels import pull_annotations
+    from .tasks import require_label_studio
+    ls = require_label_studio(c)
+    client = _ls_client(ls)
+    pid = ls["project_id"]
+    task, classes = c.scenario.task, list(c.scenario.classes)
+    project = client._request("GET", f"/api/projects/{pid}")
+    if ls_config_check(project.get("label_config"), classes, task).get("has_review_choice") is False:
+        raise ValueError(f"Label Studio 项目 #{pid} 的标注界面里没有确认选项，补了也收不进来："
+                         "先在标注系统页“按现在的类别新建 Label Studio 项目”")
+    wanted = set(image_ids or [])
+    items = [it for it in review_items(c.directory, task, classes)
+             if it["kind"] == "coverage" and (not wanted or it["image_id"] in wanted)]
+    out = {"ls_project": pid, "confirmed": 0, "skipped": {}, "failed": []}
+    skip = lambda why: out["skipped"].__setitem__(why, out["skipped"].get(why, 0) + 1)
+    for it in items:
+        choice = CONFIRMABLE.get(it.get("raw_reason"))
+        if not choice:
+            skip("没画框或选了 No target，要人判断")
+            continue
+        links = [l for l in it["links"] if str(l.get("project")) == str(pid)]
+        if not links:
+            skip("不在当前 Label Studio 项目里")
+            continue
+        try:
+            t = client._request("GET", f"/api/tasks/{links[-1]['task']}")
+            anns = [a for a in (t.get("annotations") or []) if isinstance(a.get("result"), list)
+                    and not a.get("was_cancelled") and not a.get("skipped")]
+            if not anns:
+                skip("Label Studio 里已经没有有效标注")
+                continue
+            ann = max(anns, key=lambda a: a.get("id") or 0)
+            result = ann["result"]
+            if any(r.get("from_name") == "coverage" for r in result if isinstance(r, dict)):
+                skip("Label Studio 里已经选过了（回收一下就好）")
+                continue
+            to_name = next((r.get("to_name") for r in result if isinstance(r, dict) and r.get("to_name")), "image")
+            result = result + [{"id": f"lota-confirm-{ann['id']}", "type": "choices", "from_name": "coverage",
+                                "to_name": to_name, "origin": "manual", "value": {"choices": [choice]}}]
+            client._request("PATCH", f"/api/annotations/{ann['id']}", payload={"result": result})
+            out["confirmed"] += 1
+        except Exception as e:
+            out["failed"].append({"image_id": it["image_id"], "error": str(e)[:200]})
+    if out["confirmed"]:
+        out["pull"] = pull_annotations(c.directory, ls, classes, task=task)
+    return out
+
+
 REVIEW_TAB_TITLES = {"rotated": "LOTA·框是斜的", "class": "LOTA·类别名对不上", "coverage": "LOTA·没选确认选项",
                      "conflict": "LOTA·标注不一致", "geometry": "LOTA·框有问题", "unsure": "LOTA·拿不准",
                      "stale": "LOTA·加类别前的旧标注", "other": "LOTA·其他问题"}
@@ -910,6 +971,7 @@ TOOLS.update({
     "labels.ls_setup": Tool("连接 Label Studio", LsSetup, ls_setup),
     "labels.push_prelabel": Tool("送 Label Studio（带模型预框）", PushPrelabel, push_prelabel),
     "labels.rereview": Tool("送回 Label Studio 复核（带已有的框）", Rereview, rereview),
+    "labels.confirm_reviewed": Tool("批量补确认（框画了、忘选确认选项）", ConfirmReviewed, confirm_reviewed),
 })
 
 

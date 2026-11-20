@@ -1158,6 +1158,14 @@ async function reviewItemsPanel(project,runAndRefresh){
       button("在 Label Studio 里只看这一组 ↗",lsTab,"primary"),
       button(picked.size===shown.length?"取消全选":"全选这一组",()=>{if(picked.size===shown.length)picked.clear();else all.forEach((i)=>picked.add(i));draw();},"small"),
       filter==="rotated"?button("斜框转正（"+label+"）",runAndRefresh("labels.straighten",{image_ids:use},"斜框转正"),"primary"):"",
+      filter==="coverage"?button("批量补确认（"+label+"）",(ev)=>{
+        const fixable=["Confirm all target classes have been reviewed","Confirm the single image category"];
+        const n=shown.filter((it)=>use.includes(it.image_id)&&fixable.includes(it.raw_reason)).length;
+        if(!n){notifyUser("这里没有“画了框、忘选确认选项”的图；没画框或选了 No target 的要在 Label Studio 里逐个判断",true);return;}
+        if(!confirm("给 "+n+" 张“画了框、但没选确认选项”的图统一补上确认选项（Targets reviewed），然后回收进引擎。\n\n"+
+          "这会跳过逐张检查：如果其中有框没画全的图，漏掉的目标会被当成“不是目标”进训练集。\n只在你确定当时都画全了时使用。继续？"))return;
+        return runAndRefresh("labels.confirm_reviewed",{image_ids:use},"批量补确认")(ev);
+      },"",{title:"只补“框画了、确认选项没选”的；没画框、或画了框却选 No target 的不动"}):"",
       filter==="stale"||filter==="class"||filter==="coverage"?button("送回 Label Studio 复核",()=>toolDialog("labels.rereview"),filter==="stale"?"primary":""):"");
   };
   draw();
