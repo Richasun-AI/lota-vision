@@ -340,7 +340,8 @@ def _ensure_category(c, key, taxonomy=None):
     if key in cats and cats[key].enabled:
         return
     from .store import Scenario
-    project = Path(c.directory).name
+    from .tasks import project_id_of
+    project = project_id_of(c)
     current = c.engine.store.project(project)
     config = dict(current["config"])
     categories = dict(config.get("categories") or {})
@@ -353,7 +354,7 @@ def _ensure_category(c, key, taxonomy=None):
             "name": t.get("name") or key, "name_en": t.get("name_en", ""), "description": "", "enabled": True}
     config["categories"] = categories
     c.engine.save(project, Scenario.model_validate(config), current["revision"])
-    c.scenario = Scenario.model_validate(config)
+    c.scenario = c.scenario.model_copy(update={"categories": Scenario.model_validate(config).categories})  # 标注任务里只换类别，任务的标签表不动
 
 
 def _ls_client(cfg):
@@ -383,31 +384,39 @@ def ls_setup(c, base_url="http://127.0.0.1:8081", title=None, token_env="LABEL_S
     """给当前子项目建一个 Label Studio 项目（标注模板由引擎按当前类别生成，含确认选项），并登记本地图片目录；
     已连接过就直接复用（new=True 时新建一个并切换过去）。"""
     from .labels import LabelStudioClient, label_config
-    project = Path(c.directory).name
+    from .tasks import project_id_of, source_project, task_id_of
+    project, task_id = project_id_of(c), task_id_of(c)
+    root = source_project(c.directory)
     if c.scenario.label_studio and not new:
         return {"project_id": c.scenario.label_studio.project_id, "reused": True,
                 "url": f"{c.scenario.label_studio.base_url}/projects/{c.scenario.label_studio.project_id}"}
     cfg = {"base_url": base_url, "token_env": token_env}
     client = _ls_client(cfg)
     created = client._request("POST", "/api/projects/", payload={
-        "title": title or f"LOTA · {c.scenario.name}", "label_config": _pose_cfg(c) or label_config(list(c.scenario.classes), c.scenario.task)})
+        "title": title or f"LOTA · {c.scenario.name}" + (f" · {c.scenario.annotation_tasks[task_id].name}" if task_id else ""),
+        "label_config": _pose_cfg(c) or label_config(list(c.scenario.classes), c.scenario.task)})
     pid = created["id"]
-    guide = Path(c.directory) / "guideline.md"
+    guide = root / "guideline.md"
     if guide.is_file() and guide.read_text(encoding="utf-8").strip():   # 子项目写过标注规范：同步成新项目的标注说明
         try:
             from .hub import sync_guideline
             sync_guideline({**cfg, "project_id": pid}, guide.read_text(encoding="utf-8"))
         except Exception:
             pass
-    raw = (Path(c.directory) / "raw").resolve()
+    raw = (root / "raw").resolve()   # 原图在子项目目录，标注任务共用
     raw.mkdir(exist_ok=True)
     client._request("POST", "/api/storages/localfiles", payload={  # 允许 Label Studio 读引擎复制进来的原图
         "project": pid, "path": str(raw), "use_blob_urls": True, "title": "LOTA raw"})
     from .store import Scenario
     current = c.engine.store.project(project)
     config = dict(current["config"])
-    config["label_studio"] = {"base_url": base_url, "project_id": pid, "token_env": token_env,
-                              "local_files_root": local_files_root}
+    ls = {"base_url": base_url, "project_id": pid, "token_env": token_env, "local_files_root": local_files_root}
+    if task_id:   # 标注任务：连接记在任务自己身上，不动子项目的默认连接
+        tasks = dict(config.get("annotation_tasks") or {})
+        tasks[task_id] = {**dict(tasks[task_id]), "label_studio": ls}
+        config["annotation_tasks"] = tasks
+    else:
+        config["label_studio"] = ls
     c.engine.save(project, Scenario.model_validate(config), current["revision"])  # 走引擎校验，记一个新配置版本
     old = c.scenario.label_studio.project_id if c.scenario.label_studio else None
     return {"project_id": pid, "reused": False, "url": f"{base_url}/projects/{pid}", "previous_project_id": old}
@@ -472,9 +481,8 @@ def rereview(c, which="all", selector="", confidence=0.25, device="0", limit=100
     """把要重新确认的图带着已有的框送进当前 Label Studio 项目：打开就有框，补画新类别、改错框，再选 Targets reviewed 提交。
     选了模型的话，再用它给“标注时还没有的类别”预画框。已经在当前 Label Studio 项目里的图不重复送。"""
     from .labels import _classes, _make_tasks, _project_name, _remote_tasks_by_image
-    ls = c.engine.store.project(Path(c.directory).name)["config"].get("label_studio")
-    if not ls:
-        raise ValueError("还没连接 Label Studio：先运行“连接 Label Studio”")
+    from .tasks import require_label_studio
+    ls = require_label_studio(c)
     task, classes = c.scenario.task, list(c.scenario.classes)
     if task != "detect":
         raise ValueError("送回复核目前只支持检测（画框）任务")
@@ -748,10 +756,8 @@ def straighten(c, image_ids, max_angle=45):
     from contextlib import closing
     from .labels import _raw_image, pull_annotations
     from .store import Scenario
-    cfg = c.engine.store.project(Path(c.directory).name)["config"]
-    ls = cfg.get("label_studio")
-    if not ls:
-        raise ValueError("还没连接 Label Studio")
+    from .tasks import require_label_studio
+    ls = require_label_studio(c)
     if c.scenario.task != "detect":
         raise ValueError("斜框转正只用于检测（正框）任务；旋转框任务（obb）本来就收斜框")
     client = _ls_client(ls)
@@ -818,7 +824,8 @@ def push_prelabel(c, image_ids, selector="production", confidence=0.25, device="
     """把图片送进 Label Studio，并带上模型预框（打开就有框，只需删错框、补漏框、调边界，再选“Targets reviewed”）。"""
     from .labels import LabelStudioClient, _make_tasks, _project_name, _remote_tasks_by_image
     from .models import predict
-    ls = c.engine.store.project(Path(c.directory).name)["config"].get("label_studio") or (
+    from .tasks import live_label_studio
+    ls = live_label_studio(c) or (
         c.scenario.label_studio.model_dump() if c.scenario.label_studio else None)
     if not ls:
         raise ValueError("还没连接 Label Studio：先运行“连接 Label Studio”节点")
@@ -1927,10 +1934,10 @@ def _with_live_ls(tool_id):
 
     def run(c, **kw):
         if c.scenario.label_studio is None:
-            from .store import Scenario
-            cfg = c.engine.store.project(Path(c.directory).name)["config"]
-            if cfg.get("label_studio"):
-                c.scenario = Scenario.model_validate(cfg)
+            from .store import LabelStudio
+            from .tasks import require_label_studio
+            # 只补上连接，任务的标签表、类型不动（以前整个换成子项目配置，标注任务里会查错子项目、丢掉任务标签）
+            c.scenario = c.scenario.model_copy(update={"label_studio": LabelStudio.model_validate(require_label_studio(c))})
         return orig.function(c, **kw)
     TOOLS[tool_id] = Tool(orig.title, orig.model, run)
 

@@ -563,12 +563,12 @@ class LsWebhook(Spec):
 def ls_webhook(c, enabled=True, engine_url="http://127.0.0.1:8795"):
     """在 Label Studio 里给本子项目的标注项目登记（或取消）webhook：一提交/修改标注，引擎就自动回收"""
     from .labels import LabelStudioClient
-    cfg = c.engine.store.project(Path(c.directory).name)["config"].get("label_studio")
-    if not cfg or not cfg.get("project_id"):
-        raise ValueError("这个子项目还没连接 Label Studio：先运行“连接 Label Studio”")
+    from urllib.parse import quote
+    from .tasks import project_id_of, require_label_studio, task_id_of
+    cfg = require_label_studio(c)
     cli = LabelStudioClient.from_config(cfg)
-    pid = Path(c.directory).name
-    url = f"{engine_url.rstrip('/')}/api/hooks/label-studio?project={pid}"
+    pid, task_id = project_id_of(c), task_id_of(c)
+    url = f"{engine_url.rstrip('/')}/api/hooks/label-studio?project={pid}" + (f"&annotation_task={quote(task_id)}" if task_id else "")
     existing = [w for w in (cli._request("GET", "/api/webhooks", query={"project": cfg["project_id"]}) or [])
                 if str(w.get("url", "")).startswith(engine_url.rstrip("/") + "/api/hooks/label-studio")]
     for w in existing:
@@ -590,20 +590,21 @@ def register_hooks(router, engine, directory):
     from fastapi import Body
 
     @router.post("/hooks/label-studio", tags=["hub"])
-    def ls_hook(project: str, payload: dict = Body(default_factory=dict)):
+    def ls_hook(project: str, annotation_task: str = "", payload: dict = Body(default_factory=dict)):
         """Label Studio 回调：标注有变化就排一个“回收标注”任务（已有排队/运行中的就不重复排）"""
         directory(project)
+        args = {"annotation_task": annotation_task} if annotation_task else {}   # 标注任务各自的 Label Studio 项目回收到各自目录
         busy = [j for j in engine.store.jobs(project) if j["kind"] == "labels.pull" and j["status"] in ("queued", "running")] \
             if hasattr(engine.store, "jobs") else []
         if busy:
             return {"queued": False, "reason": "已有回收任务在排队"}
         try:
-            job = engine.enqueue_action(project, "labels.pull", {})
+            job = engine.enqueue_action(project, "labels.pull", args)
         except ValueError as e:
             if "Start the scenario" not in str(e):
                 raise
             engine.store.activate(project, True)
-            job = engine.enqueue_action(project, "labels.pull", {})
+            job = engine.enqueue_action(project, "labels.pull", args)
         return {"queued": True, "job_id": job["id"], "action": payload.get("action")}
 
 
@@ -731,12 +732,10 @@ class LsGuide(Spec):
 def ls_guide(c, text=""):
     """把标注规范写进 Label Studio 项目的“标注说明”，并设为每次打开任务都显示"""
     from .labels import LabelStudioClient
-    cfg = c.engine.store.project(Path(c.directory).name)["config"]
-    ls = cfg.get("label_studio")
-    if not ls or not ls.get("project_id"):
-        raise ValueError("这个子项目还没连接 Label Studio：先运行“连接 Label Studio”")
-    st = load_settings(c.directory)
-    text = text or st.get("guide", {}).get("text") or default_guide(cfg.get("name", ""), cfg.get("task", "detect"), cfg.get("classes", []), st.get("class_names"))
+    from .tasks import require_label_studio, source_project
+    ls = require_label_studio(c)
+    st = load_settings(source_project(c.directory))
+    text = text or st.get("guide", {}).get("text") or default_guide(c.scenario.name, c.scenario.task, list(c.scenario.classes), st.get("class_names"))
     cli = LabelStudioClient.from_config(ls)
     cli._request("PATCH", f"/api/projects/{ls['project_id']}", payload={"expert_instruction": guide_html(text), "show_instruction": True})
     return {"ls_project": ls["project_id"], "lines": len([l for l in text.splitlines() if l.strip()])}
