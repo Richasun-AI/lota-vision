@@ -477,29 +477,42 @@ def register_overview(router, engine, directory):
         from .labels import holdout_info
         return holdout_info(directory(project_id))
 
-    @router.get("/projects/{project_id}/hub/ls-status", tags=["hub"])
-    def project_ls_status(project_id: str):
-        """标注系统页用：本子项目的 Label Studio 进度（任务数、已标注、引擎已回收、自动回收开没开）"""
+    def _scope(project_id, annotation_task=""):
+        """标注系统页的当前范围：选了标注任务就用任务自己的目录、Label Studio 连接、标签、类型；没选 = 子项目默认。
+        返回 (标注目录, LS 连接, 标签, 任务类型, 子项目目录)"""
         d = directory(project_id)
         conf = engine.store.project(project_id)["config"]
-        cfg = conf.get("label_studio")
-        ls = ls_status(d, cfg, conf.get("classes"), conf.get("task", "detect"))
+        if not annotation_task:
+            return d, conf.get("label_studio"), conf.get("classes") or [], conf.get("task", "detect"), d
+        from .store import Scenario
+        from .tasks import scoped
+        try:
+            td, t = scoped(d, Scenario.model_validate(conf), annotation_task)
+        except ValueError as e:
+            raise HTTPException(400, f"没有这个标注任务：{annotation_task}") from e
+        return td, (t.label_studio.model_dump(mode="json") if t.label_studio else None), list(t.classes), t.task, d
+
+    @router.get("/projects/{project_id}/hub/ls-status", tags=["hub"])
+    def project_ls_status(project_id: str, annotation_task: str = ""):
+        """标注系统页用：当前标注任务（没选 = 子项目默认）的 Label Studio 进度（任务数、已标注、引擎已回收、自动回收开没开）"""
+        d, cfg, classes, task, root = _scope(project_id, annotation_task)
+        ls = ls_status(d, cfg, classes, task)
         if ls and ls.get("project_id"):
-            ls["url"] = f"{load_settings(d)['label_studio']['public_url'].rstrip('/')}/projects/{ls['project_id']}/data"
+            ls["url"] = f"{load_settings(root)['label_studio']['public_url'].rstrip('/')}/projects/{ls['project_id']}/data"
         from .flow import rereview_candidates
-        cands = rereview_candidates(d, conf.get("task", "detect"), conf.get("classes") or [])
+        cands = rereview_candidates(d, task, classes)
         review = {"stale": sum(1 for v in cands.values() if v[0] == "stale"),
                   "rejected": sum(1 for v in cands.values() if v[0] == "rejected")}
-        return {"connected": bool(ls), **(ls or {}), "classes": conf.get("classes"), "needs_review": review}
+        return {"connected": bool(ls), **(ls or {}), "classes": classes, "task": task,
+                "annotation_task": annotation_task or None, "needs_review": review}
 
     @router.get("/projects/{project_id}/hub/review-items", tags=["hub"])
-    def project_review_items(project_id: str):
+    def project_review_items(project_id: str, annotation_task: str = ""):
         """收不进来 / 要重新确认的标注：每张图的原因、怎么改、框、Label Studio 任务链接"""
         from .flow import review_items
-        d = directory(project_id)
-        conf = engine.store.project(project_id)["config"]
-        public = load_settings(d)["label_studio"].get("public_url") or ""
-        return review_items(d, conf.get("task", "detect"), conf.get("classes") or [], public)
+        d, _, classes, task, root = _scope(project_id, annotation_task)
+        public = load_settings(root)["label_studio"].get("public_url") or ""
+        return review_items(d, task, classes, public)
 
     @router.post("/projects/{project_id}/hub/review-tab", tags=["hub"])
     def project_review_tab(project_id: str, payload: dict = Body(...)):
@@ -508,17 +521,16 @@ def register_overview(router, engine, directory):
         kind = payload.get("kind", "")
         if kind not in REVIEW_TAB_TITLES:
             raise HTTPException(400, f"没有这个分组：{kind}")
-        d = directory(project_id)
-        conf = engine.store.project(project_id)["config"]
-        if not (conf.get("label_studio") or {}).get("project_id"):
+        d, cfg, classes, task, root = _scope(project_id, payload.get("annotation_task") or "")
+        if not (cfg or {}).get("project_id"):
             raise HTTPException(400, "还没连接 Label Studio")
-        public = load_settings(d)["label_studio"].get("public_url") or ""
-        return review_tab_start(d, conf.get("label_studio"), conf.get("task", "detect"), conf.get("classes") or [], kind, public)
+        public = load_settings(root)["label_studio"].get("public_url") or ""
+        return review_tab_start(d, cfg, task, classes, kind, public)
 
     @router.get("/projects/{project_id}/hub/review-tab", tags=["hub"])
-    def project_review_tab_status(project_id: str, kind: str = ""):
+    def project_review_tab_status(project_id: str, kind: str = "", annotation_task: str = ""):
         from .flow import review_tab_status
-        return review_tab_status(directory(project_id), kind)
+        return review_tab_status(_scope(project_id, annotation_task)[0], kind)
 
     @router.get("/overview", tags=["hub"])
     def overview():

@@ -112,7 +112,7 @@ function message(error) {
 }
 
 async function request(path, method = "GET", body, mode = "json") {
-  if(method==="GET" && state.annotationTask && /\/projects\/[^/]+\/(annotations|datasets|models)(\?|$)/.test(path)){
+  if(method==="GET" && state.annotationTask && /\/projects\/[^/]+\/(annotations|datasets|models|hub\/(ls-status|review-items|review-tab))(\?|$)/.test(path)){
     path+=(path.includes("?")?"&":"?")+"annotation_task="+encodeURIComponent(state.annotationTask);
   }
   const headers = {};
@@ -1142,7 +1142,7 @@ async function reviewItemsPanel(project,runAndRefresh){
       if(w)w.document.write("<p style='font:15px sans-serif;padding:24px'>正在准备 Label Studio 标签页，几百个任务要一两分钟，请稍候…</p>");
       const old=btn?.textContent;if(btn)btn.disabled=true;
       try{
-        let j=await request(url,"POST",{kind});
+        let j=await request(url,"POST",{kind,annotation_task:state.annotationTask||""});
         while(j.running){
           if(btn)btn.textContent=j.total?`准备中 ${j.done}/${j.total}…`:"准备中…";
           await new Promise((r)=>setTimeout(r,1500));
@@ -1172,13 +1172,18 @@ async function labelsPage(){
   // 直接排“回收标注”任务（不弹参数框），完成后刷新本页
   const pullNow=asyncClick(async()=>{const job=await queueTool("labels.pull",{},project,false);notifyUser("正在从 Label Studio 回收标注…");
     trackJob(project,job,"回收标注",()=>{if(state.tab==="labels"&&state.project?.id===project.id)refresh("labels");});});
-  const autoPull=(on)=>asyncClick(async()=>{const job=await request(pathFor(project)+"/tools/labels.ls_webhook","POST",{enabled:on,engine_url:"http://127.0.0.1:8795"});
+  const withTask=(args)=>state.annotationTask?{...args,annotation_task:state.annotationTask}:args;   // 选了标注任务：按钮作用在任务自己的 Label Studio 项目上
+  const autoPull=(on)=>asyncClick(async()=>{const job=await request(pathFor(project)+"/tools/labels.ls_webhook","POST",withTask({enabled:on,engine_url:"http://127.0.0.1:8795"}));
     trackJob(project,job,on?"开启自动回收":"关闭自动回收",()=>{if(state.tab==="labels"&&state.project?.id===project.id)refresh("labels");});});
   const runAndRefresh=(tool,args,title,then)=>asyncClick(async()=>{
-    const job=await request(pathFor(project)+"/tools/"+encodeURIComponent(tool),"POST",args);notifyUser("已提交「"+title+"」");
+    const job=await request(pathFor(project)+"/tools/"+encodeURIComponent(tool),"POST",withTask(args));notifyUser("已提交「"+title+"」");
     trackJob(project,job,title,async(done)=>{if(then)await then(done);if(state.tab==="labels"&&state.project?.id===project.id)refresh("labels");});});
   // 类别：只能在末尾追加（删改会让已有标注的类别编号错位）；加了以后旧标注要“送回复核”检查新类别
-  const classesPanel=panel(h("div",{class:"rail"},h("strong",{},"检测类别"),button("添加类别",()=>addClassDialog(project),"small")),
+  const taskDef=state.annotationTask?(project.config.annotation_tasks||{})[state.annotationTask]:null;
+  const classesPanel=taskDef?panel(h("div",{class:"rail"},h("strong",{},"标签（标注任务 "+taskDef.name+"）"),button("管理标注任务",()=>annotationTaskEditor(),"small")),
+    h("p",{},(taskDef.classes||[]).map((c,i)=>i+". "+c).join("　")),
+    h("p",{class:"small muted"},"这是当前标注任务的标签，在“管理标注任务”里改；Label Studio 项目、回收、送回复核都按这个任务来。")):
+    panel(h("div",{class:"rail"},h("strong",{},"检测类别"),button("添加类别",()=>addClassDialog(project),"small")),
     h("p",{},(project.config.classes||[]).map((c,i)=>i+". "+c).join("　")),
     h("p",{class:"small muted"},"一个模型可以识别多个类别，以后还能接着加。新类别只加在末尾；加了以后，以前的标注没检查过新类别，要先“送回复核”再进数据集。"));
   const cfg=ls.config||{},cfgBad=ls.connected&&!ls.error&&((cfg.missing_classes||[]).length||cfg.has_review_choice===false);
@@ -1190,7 +1195,7 @@ async function labelsPage(){
       async()=>{await request(pathFor(project)+"/tools/labels.ls_webhook","POST",{enabled:true,engine_url:"http://127.0.0.1:8795"});await initialize(project.id);}),"primary"))):"";
   const reviewPanel=await reviewItemsPanel(project,runAndRefresh);
   let status;
-  if(!ls.connected)status=panel(h("strong",{},"Label Studio"),h("p",{},"这个子项目还没连接 Label Studio。点“提交所选图片”时会提示一键连接。"));
+  if(!ls.connected)status=panel(h("strong",{},"Label Studio"),h("p",{},(taskDef?"标注任务“"+taskDef.name+"”":"这个子项目")+"还没连接 Label Studio。第一次“提交所选图片”时会自动按标签建项目。"));
   else if(ls.error)status=panel(h("strong",{},"Label Studio 项目 #"+ls.project_id),h("p",{class:"error"},"连不上 Label Studio："+ls.error));
   else{
     const behind=Math.max(0,(ls.annotated||0)-(ls.pulled||0));
