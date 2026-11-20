@@ -149,6 +149,16 @@ def register_routes(router, engine, directory):
     def types_summary(lib: str = ""):
         return guard(summary, lib)
 
+    @router.get("/types/taxonomy", tags=["types"])
+    def types_taxonomy(lib: str = ""):
+        """只要类型清单（类别编辑器“从照片类型同步”用）：现有类型 + 网页上删除 / 并入别类的代号"""
+        def run():
+            L = imagelib.get(lib)
+            return {"lib": {"id": L.id, "name": L.name},
+                    "types": {k: {"name": v.get("name", k), "name_en": v.get("name_en", "")} for k, v in L.taxonomy.items()},
+                    "removed": L._removed_types()}
+        return guard(run)
+
     @router.post("/types/new", tags=["types"])
     def type_new(payload: dict = Body(...), lib: str = ""):
         split = lambda v: [x.strip() for x in (v if isinstance(v, list) else str(v or "").replace("，", ",").split(",")) if x.strip()]

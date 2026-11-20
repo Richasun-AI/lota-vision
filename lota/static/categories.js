@@ -30,18 +30,44 @@ async function categoryEditor(){
  }
  codes.forEach(code=>add(code,definitions[code]||{},true));
  search.oninput=()=>rows.forEach(({controls,row})=>row.hidden=![controls.code.value,controls.name.value,controls.english.value].join(" ").toLowerCase().includes(search.value.toLowerCase()));
- body.append(h("p",{},"类别属于当前子项目场景。已有代码保持稳定，修改名称会更新图库显示；停用类别仍保留历史记录。没用过的类别可以删除；模型训练类别和已有分拣照片的类别只能停用。"),
- search,h("div",{class:"actions"},button("新增类别",()=>add()),
- button("导入标准照片类型（中英）",asyncClick(async()=>{
-  const std=await fetch("/static/standard_categories.json").then(r=>r.ok?r.json():{}).catch(()=>({}));if(!Object.keys(std).length){UI.toast("没有标准照片类型清单（static/standard_categories.json）",true);return;}
-  const have=new Set(rows.map(r=>r.controls.code.value.trim()));let n=0;
-  for(const [code,d] of Object.entries(std)){
-   const old=rows.find(r=>r.controls.code.value.trim()===code);
-   if(old){if(!old.controls.name.value.trim()){old.controls.name.value=d.name;old.controls.english.value=d.name_en;old.controls.description.value=d.description;n++;}continue;}
-   if(!have.has(code)){add(code,d);n++;}
+ // 照片类型以“照片类型”页的图库为准（那里细化 / 改名 / 并入 / 删除）；没有图库时退回内置的 44 个标准类型
+ const libs=await request("/api/types/libs").catch(()=>({libs:[]}));
+ const libSel=libs.libs?.length>1?select(libs.libs.map(l=>[l.id,"图库："+l.name]),libs.default):null;
+ const mark=(row,color)=>{row.style.borderLeft="4px solid "+color;};
+ const syncTypes=asyncClick(async()=>{
+  const std=await fetch("/static/standard_categories.json").then(r=>r.ok?r.json():{}).catch(()=>({}));
+  let types=std,removed={},source="内置标准照片类型";
+  if(libs.libs?.length){
+   const t=await request("/api/types/taxonomy?lib="+encodeURIComponent(libSel?.value||""));
+   types=t.types;removed=t.removed||{};source="图库“"+t.lib.name+"”";
   }
-  notifyUser("已加入 "+n+" 个类别，点“保存类别”生效");
- }),"primary")),list);
+  if(!Object.keys(types).length){notifyUser("没有可同步的照片类型：先在“照片类型”页建图库",true);return;}
+  const find=code=>rows.find(r=>r.controls.code.value.trim()===code);
+  let added=0,renamed=0,disabled=0;const bad=[];
+  for(const [code,d] of Object.entries(types)){
+   if(!/^[a-z][a-z0-9_.-]{0,63}$/.test(code)){bad.push(code);continue;}
+   const old=find(code),c=old?.controls;
+   if(!old){add(code,{name:d.name,name_en:d.name_en,description:std[code]?.description||"",enabled:true});mark(rows.at(-1).row,"#2e7d32");added++;continue;}
+   if(c.name.value.trim()!==d.name||(d.name_en&&c.english.value.trim()!==d.name_en)){
+    c.name.value=d.name;if(d.name_en)c.english.value=d.name_en;
+    if(!c.description.value.trim()&&std[code])c.description.value=std[code].description;
+    mark(old.row,"#1565c0");renamed++;
+   }
+  }
+  for(const [code,into] of Object.entries(removed)){
+   const old=find(code);if(!old||!old.controls.enabled.checked)continue;
+   old.controls.enabled.checked=false;
+   if(into&&!old.controls.description.value.includes("已并入"))old.controls.description.value=(old.controls.description.value+" （已并入 "+into+"）").trim();
+   mark(old.row,"#c62828");disabled++;
+  }
+  const parts=[added&&"新增 "+added,renamed&&"改名 "+renamed,disabled&&"停用 "+disabled+"（照片类型页已删除/并入）"].filter(Boolean);
+  notifyUser(parts.length?"从"+source+"同步："+parts.join("，")+"。左边有色条的是变动行，点“保存类别”生效"
+   +(bad.length?"；代号不合规跳过："+bad.join("、"):""):"已和"+source+"一致，没有要改的");
+ });
+ body.append(h("p",{},"类别属于当前子项目场景。已有代码保持稳定，修改名称会更新图库显示；停用类别仍保留历史记录。没用过的类别可以删除；模型训练类别和已有分拣照片的类别只能停用。"),
+ h("p",{class:"small muted"},"“从照片类型同步”以照片类型页的图库为准：新类型加进来，改过名的跟着改，删除或并入别类的在这里停用（不删，历史照片还在）。在照片类型页细化后，回来再点一次即可。"),
+ search,h("div",{class:"actions"},button("新增类别",()=>add()),libSel||"",
+ button("从照片类型同步（中英）",syncTypes,"primary")),list);
  openDialog(project.config.name+" · 类别编辑器",formContent(body,"保存类别",async()=>{
   const categories={};
   for(const {controls:c} of rows){
