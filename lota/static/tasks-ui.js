@@ -62,10 +62,10 @@ function annotationTaskEditor(){
  const choices=select([["","新建任务"],...Object.entries(definitions).map(([id,t])=>[id,t.name])],"");
  const id=textInput("",{placeholder:"如 telecom-site-inspection"}),name=textInput(),task=select([["detect","检测：画框"],["classify","分类：整图单选"]],"detect");
  const classes=labelPicker(config),site=h("input",{type:"checkbox",checked:false});
- const url=textInput(),studioId=textInput(),env=textInput("LOTA_LABEL_STUDIO_TOKEN"),files=textInput();
+ const url=textInput(),studioId=textInput(),env=textInput("LABEL_STUDIO_TOKEN"),files=textInput();
  choices.onchange=()=>{const t=definitions[choices.value];id.value=choices.value;id.readOnly=!!t;name.value=t?.name||"";
  task.value=t?.task||"detect";classes.set(t?.classes||[]);site.checked=t?.require_site===true;
- url.value=t?.label_studio?.base_url||"";studioId.value=t?.label_studio?.project_id||"";files.value=t?.label_studio?.local_files_root||"";};
+ url.value=t?.label_studio?.base_url||"";studioId.value=t?.label_studio?.project_id||"";files.value=t?.label_studio?.local_files_root||"";env.value=t?.label_studio?.token_env||"LABEL_STUDIO_TOKEN";};
  classes.set([]);
  const form=formContent(h("div",{},choices,h("p",{},"分类每图只选一个标签；检测需要标全当前任务类别，并确认无目标样本。"),
  h("div",{class:"form-grid"},field("任务代码",id,"小写字母、数字、短横线，如 telecom-site-inspection；建好后不能改"),field("任务名称",name),field("任务类型",task),
