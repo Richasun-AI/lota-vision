@@ -182,10 +182,30 @@ def import_annotations(c, tasks):
     return import_annotations(c.directory, tasks, c.scenario.classes, task=c.scenario.task)
 
 
+def auto_extract(c, image_ids):
+    """送标注前：还没抽取（复制进子项目 raw）的图先自动抽取，Label Studio 只读得到 raw 里的副本。返回抽取了几张"""
+    from .catalog import extract, get_image
+    from .tasks import source_project
+    root = source_project(c.directory)   # 标注任务共用子项目的原图
+    todo = [i for i in dict.fromkeys(image_ids) if not get_image(root, i).get("raw_path")]
+    if not todo:
+        return 0
+    for image_id in todo:   # 原图路径要在允许读的目录里
+        c.engine.image_path(root, get_image(root, image_id), raw_only=False)
+    result = extract(root, todo)
+    bad = [x for x in result.get("items", []) if x.get("error")]
+    if result.get("failed") or bad:
+        raise ValueError(f"有 {result.get('failed') or len(bad)} 张图自动抽取失败（原图可能已移动或删除）：" +
+                         "；".join(f"{x.get('image_id', '')[:12]}… {x.get('error', '')}" for x in bad[:3]))
+    return len(todo)
+
+
 def push(c, image_ids):
     from .labels import push_tasks
+    extracted = auto_extract(c, image_ids)
     c.image_paths(image_ids)
-    return push_tasks(c.directory, c.label_studio(), image_ids, c.scenario.classes, task=c.scenario.task)
+    out = push_tasks(c.directory, c.label_studio(), image_ids, c.scenario.classes, task=c.scenario.task)
+    return {**out, "extracted": extracted} if extracted and isinstance(out, dict) else out
 
 
 def pull(c):

@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 from lota import flow  # noqa: F401  注册 _with_live_ls 包装
 from lota.store import Scenario, Store
@@ -55,11 +56,33 @@ class TaskLabelStudioTest(unittest.TestCase):
         self.assertEqual(project_id_of(ctx), "telecom-inspection")
         self.assertEqual(task_id_of(ctx), "telecom-site-inspection")
 
-    def test_task_without_its_own_connection_gets_clear_error(self):
-        ctx = self._task_ctx(_config(project_ls=LS))   # 子项目有连接，任务没有：不借子项目的
+    def test_first_push_creates_project_for_the_task(self):
+        ctx = self._task_ctx(_config(project_ls=LS))   # 子项目有连接，任务没有：不借子项目的，自动给任务建一个
         self.assertIsNone(live_label_studio(ctx))
+        calls = []
+
+        class FakeClient:
+            def _request(self, method, path, payload=None, query=None):
+                calls.append((method, path, payload))
+                return {"id": 42}
+
+        self.engine.save = self.store.save_project
+        with mock.patch.object(flow, "_ls_client", lambda cfg: FakeClient()):
+            c = self._push(ctx)
+        self.assertEqual(c.scenario.label_studio.project_id, 42)
+        self.assertEqual(c.scenario.classes, ["cctv"])                       # 任务标签没被子项目的换掉
+        self.assertIn('value="cctv"', calls[0][2]["label_config"])          # LS 项目按任务标签建
+        self.assertEqual(Path(calls[1][2]["path"]).parts[-2:], ("telecom-inspection", "raw"))   # 原图读子项目目录
+        saved = self.store.project("telecom-inspection")["config"]
+        self.assertEqual(saved["annotation_tasks"]["telecom-site-inspection"]["label_studio"]["project_id"], 42)
+        self.assertEqual(saved["label_studio"]["project_id"], 7)            # 子项目默认连接不动
+        self.assertEqual(saved["annotation_tasks"]["telecom-site-inspection"]["label_studio"]["base_url"], LS["base_url"])
+
+    def test_pull_without_connection_explains(self):
+        ctx = self._task_ctx(_config(project_ls=LS))
+        orig = TOOLS["labels.pull"]
         with self.assertRaisesRegex(ValueError, "标注任务“telecom-site-inspection”还没绑定 Label Studio"):
-            self._push(ctx)
+            orig.function(ctx)
 
     def test_task_connection_is_used_and_classes_kept(self):
         ctx = self._task_ctx(_config(task_ls={**LS, "project_id": 9}, project_ls=LS))
@@ -68,6 +91,26 @@ class TaskLabelStudioTest(unittest.TestCase):
         self.assertEqual(c.scenario.label_studio.project_id, 9)
         self.assertEqual(c.scenario.classes, ["cctv"])
         self.assertEqual(c.scenario.task, "detect")
+
+
+class AutoExtractTest(unittest.TestCase):
+    def test_push_extracts_unextracted_images_into_project_raw(self):
+        from PIL import Image
+        from lota import catalog
+        from lota.tools import auto_extract
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            source, project = root / "photos", root / "projects" / "telecom-inspection"
+            source.mkdir()
+            Image.new("RGB", (64, 48), "red").save(source / "S1_a.png")
+            catalog.scan(project, [{"name": "s", "path": str(source)}], stability_seconds=0)
+            image_id = catalog.list_images(project)[0]["image_id"]
+            self.assertFalse(catalog.get_image(project, image_id).get("raw_path"))
+            engine = SimpleNamespace(image_path=lambda d, record, raw_only: Path(record["path"]))
+            ctx = Context(project / "annotation-tasks" / "telecom-site-inspection", None, engine, "job", "step")
+            self.assertEqual(auto_extract(ctx, [image_id, image_id]), 1)
+            self.assertTrue(catalog.get_image(project, image_id).get("raw_path"))   # 抽到子项目，不是任务目录
+            self.assertEqual(auto_extract(ctx, [image_id]), 0)                       # 已抽取的不再抽
 
 
 if __name__ == "__main__":

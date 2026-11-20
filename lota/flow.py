@@ -820,15 +820,25 @@ class PushPrelabel(Selection):
     device: str = "0"
 
 
+def _ensure_ls(c):
+    """送 Label Studio 前用：当前范围（子项目或标注任务）还没连接，就自动按当前标签建一个 LS 项目并记下，以后复用。
+    地址、令牌环境变量、本地图片根目录沿用子项目已有的连接；都没有就用默认值。返回 (连接, 新建结果或 None)。"""
+    from .tasks import live_label_studio, project_id_of
+    ls = live_label_studio(c)
+    if ls and ls.get("project_id"):
+        return ls, None
+    base = c.engine.store.project(project_id_of(c))["config"].get("label_studio") or {}
+    created = ls_setup(c, **{k: base[k] for k in ("base_url", "token_env", "local_files_root") if base.get(k)})
+    return live_label_studio(c), created
+
+
 def push_prelabel(c, image_ids, selector="production", confidence=0.25, device="0"):
     """把图片送进 Label Studio，并带上模型预框（打开就有框，只需删错框、补漏框、调边界，再选“Targets reviewed”）。"""
     from .labels import LabelStudioClient, _make_tasks, _project_name, _remote_tasks_by_image
     from .models import predict
-    from .tasks import live_label_studio
-    ls = live_label_studio(c) or (
-        c.scenario.label_studio.model_dump() if c.scenario.label_studio else None)
-    if not ls:
-        raise ValueError("还没连接 Label Studio：先运行“连接 Label Studio”节点")
+    from .tools import auto_extract
+    ls, _ = _ensure_ls(c)   # 还没连接就自动建项目
+    auto_extract(c, image_ids)   # 还没抽取的图先复制进子项目
     client = _ls_client(ls)
     task = c.scenario.task
     existing = _remote_tasks_by_image(client, ls["project_id"], _project_name(c.directory), task)
@@ -1933,12 +1943,19 @@ def _with_live_ls(tool_id):
     orig = TOOLS[tool_id]
 
     def run(c, **kw):
+        created = None
         if c.scenario.label_studio is None:
             from .store import LabelStudio
             from .tasks import require_label_studio
+            # 送：还没连接就自动按当前标签建 LS 项目；回收：没连接就没东西可收，照常提示
+            ls = _ensure_ls(c) if tool_id == "labels.push" else (require_label_studio(c), None)
+            ls, created = ls
             # 只补上连接，任务的标签表、类型不动（以前整个换成子项目配置，标注任务里会查错子项目、丢掉任务标签）
-            c.scenario = c.scenario.model_copy(update={"label_studio": LabelStudio.model_validate(require_label_studio(c))})
-        return orig.function(c, **kw)
+            c.scenario = c.scenario.model_copy(update={"label_studio": LabelStudio.model_validate(ls)})
+        out = orig.function(c, **kw)
+        if created and isinstance(out, dict):
+            out = {**out, "label_studio_created": created}
+        return out
     TOOLS[tool_id] = Tool(orig.title, orig.model, run)
 
 
