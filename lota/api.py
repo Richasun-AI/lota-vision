@@ -217,6 +217,8 @@ def create_app(home, source_roots=(), weights_roots=(), token=None):
     prefilter.register_routes(router, engine)
     from . import streams
     streams.register_routes(router, engine, directory, app)
+    from . import merge
+    merge.register_routes(router, engine)
     app.include_router(router)
     static = Path(__file__).parent / "static"
     app.mount("/static", StaticFiles(directory=static, check_dir=False), name="static")

@@ -240,11 +240,63 @@ function renderShell() {
   $("#project-actions").replaceChildren(...(project ? [
     pill(project.active ? "运行中" : "已停用", project.active ? "good" : "warn"),
     button("配置", () => scenarioDialog(project), "small"),
+    button("合并", () => mergeDialog(project), "small", {title: "把别的子项目并进来：它变成这里的一个标注任务"}),
     button(project.active ? "停用场景" : "启动场景", asyncClick(async () => {
       await request(pathFor(project) + "/activate", "POST", {active: !project.active});
       await initialize(project.id);
     }), project.active ? "small" : "small primary"),
   ] : []));
+}
+
+// 合并子项目：把 B 并进当前子项目 A。B 的标注 / 数据集 / 模型变成 A 的一个标注任务，图片和类别并进 A，B 停用（目录保留）
+function mergeDialog(project) {
+  const others = (state.projects || []).filter((p) => p.id !== project.id && !String(p.config?.name || "").startsWith("[已并入"));
+  if (!others.length) { notifyUser("没有可以并入的其他子项目", true); return; }
+  const source = select(others.map((p) => [p.id, (p.config?.name || p.id) + "（" + p.id + "）"]), others[0].id);
+  const code = textInput(others[0].id, {placeholder: "小写字母、数字、短横线"});
+  source.onchange = () => { code.value = source.value; out.replaceChildren(); go.disabled = true; };
+  code.oninput = () => { out.replaceChildren(); go.disabled = true; };
+  const out = h("div"), body = () => ({source: source.value, task_code: code.value.trim()});
+  const n = (x) => (x == null ? 0 : x);
+  const show = (r, done) => {
+    const c = r.catalog || {}, f = r.files || {}, learn = r.sorting?.learning || {}, cats = r.categories || {};
+    const ls = r.label_studio;
+    out.replaceChildren(h("div", {class: "panel"},
+      h("p", {}, h("strong", {}, (done ? "已合并：" : "试合并结果（还没改任何东西）：")), "“" + r.source_name + "” → “" + r.target_name + "” 的标注任务 ",
+        h("code", {}, r.task_code), "。"),
+      h("ul", {},
+        h("li", {}, `图片：B 共 ${n(c.images_b)} 张，新增 ${n(c.new)} 张，两边都有 ${n(c.already_in_a)} 张（相同内容只留一份）` +
+          (c.skipped_deleted_in_a ? `，A 里删过的 ${c.skipped_deleted_in_a} 张不并` : "") + `；原图副本${done ? "" : "将"}硬链接 ${n(c.raw_linked)} 张`),
+        h("li", {}, `标注任务：B 本身变成 ${r.task_code}` + (Object.keys(r.annotation_tasks?.moved || {}).length
+          ? "；B 原有任务 " + Object.entries(r.annotation_tasks.moved).map(([a, b]) => a + " → " + b).join("、") : "")),
+        h("li", {}, "搬过去的内容：" + ((f.items || []).join("、") || "（B 还没有标注 / 模型）") +
+          (done ? `（复制 ${n(f.copied)} 个、硬链接 ${n(f.linked)} 个、改写路径 ${n(f.rewritten)} 个）` : "")),
+        h("li", {}, "类别：新增 " + ((cats.added || []).join("、") || "无") +
+          ((cats.conflicts_a_kept || []).length ? "；同代码不同名（保留 A 的）：" + cats.conflicts_a_kept.map((x) => `${x.code}（A：${x.a} / B：${x.b}）`).join("、") : "")),
+        h("li", {}, `人工确认的类别：新增 ${n(learn.added)} 张` + ((learn.conflicts || []).length ? `；${learn.conflicts.length} 张两边不一致，保留 A 的` : "")),
+        (r.sources_added || []).length ? h("li", {}, "图片来源：加入 " + r.sources_added.join("、")) : "",
+        (r.workflows || []).length ? h("li", {}, "工作流：" + r.workflows.join("、") + "（标注 / 数据集 / 模型步骤已绑定到这个任务）") : "",
+        ls ? h("li", {}, `Label Studio 项目 #${ls.project_id}：` + (ls.warning || ls.plan || ((ls.storage_added ? "已登记 A 的原图目录；" : "") + `webhook 改了 ${n(ls.webhooks_updated)} 个`))) : "",
+        ...(r.warnings || []).map((w) => h("li", {class: "error"}, w)),
+        h("li", {class: "small muted"}, done ? "B 已停用并改名“[已并入 …]”，目录原样保留；确认没问题后可以手动删除。" :
+          "正式合并后 B 会停用并改名“[已并入 …]”，目录保留；A 的已有数据冲突时都以 A 为准。"))));
+  };
+  const trial = asyncClick(async () => {
+    out.replaceChildren(empty("正在试合并…"));
+    try { show(await request(pathFor(project) + "/merge", "POST", {...body(), dry_run: true}), false); go.disabled = false; }
+    catch (e) { out.replaceChildren(h("p", {class: "error"}, e.message)); }
+  });
+  const go = button("正式合并", asyncClick(async () => {
+    if (!confirm(`把“${source.selectedOptions[0].textContent}”并入“${project.config?.name || project.id}”？`)) return;
+    go.disabled = true;
+    out.replaceChildren(empty("正在合并…（大文件用硬链接，一般很快）"));
+    try { const r = await request(pathFor(project) + "/merge", "POST", {...body(), dry_run: false}); show(r, true); await initialize(project.id); }
+    catch (e) { out.replaceChildren(h("p", {class: "error"}, e.message)); }
+  }), "primary", {disabled: true});
+  openDialog("合并子项目到“" + (project.config?.name || project.id) + "”", h("div", {},
+    h("p", {}, "选一个子项目并进来：它的标注、数据集、模型变成这里的一个标注任务（原来训练的模型还能用），图片和类别并进来，相同的图只留一份。先试合并看报告，再正式合并。"),
+    h("div", {class: "form-grid"}, field("要并入的子项目", source), field("变成的标注任务代码", code, "默认用子项目代码")),
+    h("div", {class: "actions"}, button("试合并（只看报告）", trial), go), out), true);
 }
 
 async function initialize(preferred) {
