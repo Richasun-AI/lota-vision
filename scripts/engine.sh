@@ -24,6 +24,7 @@ IFS=: read -ra _src <<<"$LOTA_SOURCE_ROOTS"; for d in "${_src[@]}"; do [ -n "$d"
 IFS=: read -ra _w <<<"$LOTA_WEIGHTS_ROOTS"; for d in "${_w[@]}"; do [ -n "$d" ] && ARGS+=(--weights-root "$d"); done
 
 running() { pgrep -f "[l]ota --home $LOTA_HOME" >/dev/null; }
+port_busy() { [ -n "$(ss -tlnH 'sport = :8795' 2>/dev/null)" ]; }
 
 # 机密配置（Label Studio 令牌等）放在 $ROOT/.env，格式 LABEL_STUDIO_TOKEN=xxxx；只加载、不打印
 if [ -f "$ROOT/.env" ]; then set -a; . "$ROOT/.env"; set +a; fi
@@ -45,7 +46,13 @@ start() {
 
 # 前台运行 API + worker（进程管理器用）：收到停止信号时两个一起停
 run() {
-  if running; then echo "引擎已在后台运行，先 bash engine.sh stop 再用 run 启动"; exit 1; fi
+  # 刚重启时上一个引擎可能还在退出（worker 收尾、端口没放），等它最多 30 秒，别一看见就退出
+  for _ in $(seq 60); do
+    running || port_busy || break
+    sleep 0.5
+  done
+  if running; then echo "引擎已在后台运行（等了 30 秒没退出），先 bash engine.sh stop 再用 run 启动"; exit 1; fi
+  if port_busy; then echo "端口 8795 被别的进程占着（等了 30 秒没释放）：$(ss -tlnpH 'sport = :8795' 2>/dev/null)"; exit 1; fi
   [ "$HOST" = 127.0.0.1 ] && echo "提示：.env 里没有 LOTA_API_TOKEN，只能本机/ssh 隧道访问"
   mkdir -p "$ROOT/logs"
   cd "$ROOT/app" || exit 1
