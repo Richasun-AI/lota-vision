@@ -51,6 +51,8 @@ AUGMENT_KEYS = ("hsv_h", "hsv_s", "hsv_v", "degrees", "translate", "scale", "she
 
 def load_settings(directory):
     f = Path(directory) / "settings.json"
+    if not f.is_file() and Path(directory).parent.name == "annotation-tasks":   # 标注任务没有自己的设置：用子项目的
+        f = Path(directory).parent.parent / "settings.json"
     saved = json.loads(f.read_text(encoding="utf-8")) if f.is_file() else {}
     out = {}
     for k, v in DEFAULT_SETTINGS.items():
@@ -99,7 +101,7 @@ def model_cards(directory):
                       "training": d.get("training"), "aliases": sorted(by_version.get(d["version"], [])),
                       "size": w.stat().st_size if w.is_file() else None, "exports": exports,
                       "continued_from": extra.get("continued_from"), "base": extra.get("base"),
-                      "evaluations": evals, "note": extra.get("note", "")})
+                      "evaluations": evals, "note": extra.get("note", ""), "strategy": extra.get("strategy") or []})
     cards.sort(key=lambda c: c.get("created_at") or "", reverse=True)
     return {"models": cards, "aliases": aliases}
 
@@ -277,21 +279,49 @@ def try_model(directory, version, data: bytes, conf=0.25, tile=False):
         os.unlink(tmp)
 
 
+def task_dir(engine, directory, project_id, annotation_task=""):
+    """数据集 / 模型 / 训练记录 / 质检所在的目录：选了标注任务 = 子项目/annotation-tasks/<任务>，没选 = 子项目目录。
+    图库、上传文件、项目设置属于子项目，不走这里"""
+    d = directory(project_id)
+    if not annotation_task:
+        return d
+    from .store import Scenario
+    from .tasks import scoped
+    return scoped(d, Scenario.model_validate(engine.store.project(project_id)["config"]), annotation_task)[0]
+
+
+def task_config(engine, project_id, annotation_task=""):
+    """当前范围的任务类型和标签：选了标注任务用任务的，没选用子项目的"""
+    cfg = engine.store.project(project_id)["config"]
+    t = (cfg.get("annotation_tasks") or {}).get(annotation_task) if annotation_task else None
+    if annotation_task and not t:
+        raise ValueError(f"没有这个标注任务：{annotation_task}")
+    return (t or cfg).get("task", "detect"), list((t or cfg).get("classes") or [])
+
+
+def _tuned_summary(directory):
+    """当前范围的自动调参结果（训练向导显示“会用调参参数”）"""
+    from .flow import load_tuned
+    t = load_tuned(directory)
+    return t and {k: t.get(k) for k in ("at", "dataset_version", "tried", "iterations", "epochs", "best_fitness", "hyp", "optimizer")}
+
+
 # ── 路由 ─────────────────────────────────────────────────────────────────
 def register_routes(router, engine, directory):
     from fastapi import Body, File, Form, UploadFile
     from fastapi.responses import FileResponse
 
     @router.get("/projects/{project_id}/hub/summary", tags=["hub"])
-    def summary(project_id: str):
-        d = directory(project_id)
+    def summary(project_id: str, annotation_task: str = ""):
+        d = directory(project_id)   # 图库、设置：子项目
         from .catalog import _database
         with _database(d) as db:
             images = db.execute("SELECT COUNT(*) FROM images").fetchone()[0]
             by_status = dict(db.execute("SELECT status, COUNT(*) FROM images GROUP BY status").fetchall())
-        ds, ms = dataset_cards(d), model_cards(d)
+        t = task_dir(engine, directory, project_id, annotation_task)   # 数据集、模型、已复核标注：当前标注任务
+        ds, ms = dataset_cards(t), model_cards(t)
         last_ds = ds[0] if ds else None
-        acc = accepted_count(d)
+        acc = accepted_count(t)
         prod = ms["aliases"].get("production")
         prod_card = next((m for m in ms["models"] if m["version"] == prod), None)
         return {"images": images, "by_status": by_status, "accepted_annotations": acc,
@@ -299,20 +329,21 @@ def register_routes(router, engine, directory):
                 "last_dataset": last_ds and {k: last_ds[k] for k in ("version", "image_total", "box_total", "counts", "created")},
                 "new_since_last_dataset": max(0, acc - (last_ds["image_total"] if last_ds else 0)),
                 "production": prod_card and {k: prod_card[k] for k in ("version", "metrics", "created_at")},
-                "settings": load_settings(d)}
+                "settings": load_settings(d), "tuned": _tuned_summary(t)}
 
     @router.get("/projects/{project_id}/hub/models", tags=["hub"])
-    def models(project_id: str):
-        return model_cards(directory(project_id))
+    def models(project_id: str, annotation_task: str = ""):
+        return model_cards(task_dir(engine, directory, project_id, annotation_task))
 
     @router.get("/projects/{project_id}/hub/datasets", tags=["hub"])
-    def datasets(project_id: str):
-        d = directory(project_id)
+    def datasets(project_id: str, annotation_task: str = ""):
+        d = task_dir(engine, directory, project_id, annotation_task)
         return {"datasets": dataset_cards(d), "accepted_annotations": accepted_count(d)}
 
     @router.get("/projects/{project_id}/hub/datasets/{version}/samples", tags=["hub"])
-    def samples(project_id: str, version: str, split: str = "", offset: int = 0, limit: int = 24, empty: str = ""):
-        f = directory(project_id) / "datasets" / Path(version).name / "manifest.json"
+    def samples(project_id: str, version: str, split: str = "", offset: int = 0, limit: int = 24, empty: str = "",
+                annotation_task: str = ""):
+        f = task_dir(engine, directory, project_id, annotation_task) / "datasets" / Path(version).name / "manifest.json"
         m = json.loads(f.read_text(encoding="utf-8"))
         imgs = [i for i in m.get("images") or [] if (not split or i.get("split") == split)
                 and (empty != "only" or not i.get("labels")) and (empty != "no" or i.get("labels"))]
@@ -337,27 +368,29 @@ def register_routes(router, engine, directory):
         return out
 
     @router.post("/projects/{project_id}/models/{version}/try", tags=["hub"])
-    async def try_it(project_id: str, version: str, file: UploadFile = File(...), conf: float = Form(0.25), tile: bool = Form(False)):
+    async def try_it(project_id: str, version: str, file: UploadFile = File(...), conf: float = Form(0.25), tile: bool = Form(False),
+                     annotation_task: str = ""):
         data = await file.read()
         if len(data) > 30 * 1024 * 1024:
             raise ValueError("图片太大（超过 30MB）")
         from starlette.concurrency import run_in_threadpool
-        return await run_in_threadpool(try_model, directory(project_id), version, data, conf, tile)
+        return await run_in_threadpool(try_model, task_dir(engine, directory, project_id, annotation_task), version, data, conf, tile)
 
     @router.get("/projects/{project_id}/models/{version}/files/{name}", tags=["hub"])
-    def model_file(project_id: str, version: str, name: str):
+    def model_file(project_id: str, version: str, name: str, annotation_task: str = ""):
         from .models import resolve_model
-        meta, weights = resolve_model(directory(project_id), version)
+        d = task_dir(engine, directory, project_id, annotation_task)
+        meta, weights = resolve_model(d, version)
         if name in ("weights.pt", "weights"):
             return FileResponse(weights, filename=f"{meta['version']}.pt")
-        f = directory(project_id) / "models" / meta["version"] / "exports" / Path(name).name
+        f = d / "models" / meta["version"] / "exports" / Path(name).name
         if not f.is_file():
             raise FileNotFoundError(name)
         return FileResponse(f, filename=f.name)
 
     @router.put("/projects/{project_id}/models/{version}/note", tags=["hub"])
-    def note(project_id: str, version: str, payload: dict = Body(...)):
-        _card_update(directory(project_id), Path(version).name, note=str(payload.get("note", ""))[:500])
+    def note(project_id: str, version: str, payload: dict = Body(...), annotation_task: str = ""):
+        _card_update(task_dir(engine, directory, project_id, annotation_task), Path(version).name, note=str(payload.get("note", ""))[:500])
         return {"ok": True}
 
 
@@ -472,10 +505,10 @@ def register_overview(router, engine, directory):
             return {"saved": True, "label_studio": "同步到 Label Studio 失败：" + str(e)[:160]}
 
     @router.get("/projects/{project_id}/hub/holdout", tags=["hub"])
-    def project_holdout(project_id: str):
+    def project_holdout(project_id: str, annotation_task: str = ""):
         """固定考试集的情况：有没有、多少张、来自哪一版数据集"""
         from .labels import holdout_info
-        return holdout_info(directory(project_id))
+        return holdout_info(task_dir(engine, directory, project_id, annotation_task))
 
     def _scope(project_id, annotation_task=""):
         """标注系统页的当前范围：选了标注任务就用任务自己的目录、Label Studio 连接、标签、类型；没选 = 子项目默认。
@@ -645,16 +678,20 @@ def train_progress(directory, version=""):
         except ValueError:
             pass
     pick = lambda row, *keys: next((float(row[k]) for k in keys if row.get(k) not in (None, "")), None)
+    rows = [{k.strip(): v for k, v in r.items() if k} for r in rows]   # 有的版本列名前带空格
     pts = [{"epoch": int(float(r["epoch"])), "map50": pick(r, "metrics/mAP50(B)", "metrics/accuracy_top1"),
-            "precision": pick(r, "metrics/precision(B)"), "recall": pick(r, "metrics/recall(B)")} for r in rows if r.get("epoch")]
+            "map5095": pick(r, "metrics/mAP50-95(B)"),
+            "precision": pick(r, "metrics/precision(B)"), "recall": pick(r, "metrics/recall(B)"),
+            "train_box_loss": pick(r, "train/box_loss"), "val_box_loss": pick(r, "val/box_loss"),   # 训练损失降、验证损失升 = 过拟合
+            "time": pick(r, "time")} for r in rows if r.get("epoch")]
     return {"version": f.parent.parent.parent.name, "epochs_total": total, "epochs_done": len(pts), "points": pts,
             "updated": f.stat().st_mtime, "running": time.time() - f.stat().st_mtime < 600}
 
 
 def register_progress(router, engine, directory):
     @router.get("/projects/{project_id}/train-progress", tags=["hub"])
-    def progress(project_id: str, version: str = ""):
-        return train_progress(directory(project_id), Path(version).name if version else "")
+    def progress(project_id: str, version: str = "", annotation_task: str = ""):
+        return train_progress(task_dir(engine, directory, project_id, annotation_task), Path(version).name if version else "")
 
 
 # ── 训练图表：混淆矩阵、PR 曲线、训练曲线、验证集预测（Ultralytics 训练时自动生成）────────────
@@ -663,7 +700,9 @@ PLOT_NAMES = {
     "confusion_matrix_normalized.png": "混淆矩阵（哪些类别容易认错，比例）",
     "confusion_matrix.png": "混淆矩阵（数量）",
     "BoxPR_curve.png": "PR 曲线（框）", "MaskPR_curve.png": "PR 曲线（轮廓）", "PR_curve.png": "PR 曲线",
-    "BoxF1_curve.png": "F1 曲线（找最合适的置信度阈值）", "F1_curve.png": "F1 曲线",
+    "BoxF1_curve.png": "F1 曲线（找最合适的置信度阈值）", "F1_curve.png": "F1 曲线", "MaskF1_curve.png": "F1 曲线（轮廓）",
+    "BoxP_curve.png": "精确率曲线（置信度越高，误检越少）", "BoxR_curve.png": "召回率曲线（置信度越高，漏检越多）",
+    "MaskP_curve.png": "精确率曲线（轮廓）", "MaskR_curve.png": "召回率曲线（轮廓）",
     "val_batch0_pred.jpg": "验证集：模型预测", "val_batch0_labels.jpg": "验证集：人工标注",
     "val_batch1_pred.jpg": "验证集：模型预测 2", "val_batch1_labels.jpg": "验证集：人工标注 2",
     "labels.jpg": "标注分布（框的位置、大小）",
@@ -685,13 +724,14 @@ def register_plots(router, engine, directory):
     from fastapi.responses import FileResponse
 
     @router.get("/projects/{project_id}/models/{version}/plots", tags=["hub"])
-    def plots(project_id: str, version: str):
-        meta, d = _run_dir(directory(project_id), version)
+    def plots(project_id: str, version: str, annotation_task: str = ""):
+        root = task_dir(engine, directory, project_id, annotation_task)
+        meta, d = _run_dir(root, version)
         files = [{"name": n, "title": t} for n, t in PLOT_NAMES.items() if d and (d / n).is_file()]
         per = {}
         metrics = dict(meta.get("metrics") or {})
         if not any(k.startswith("class/") for k in metrics):   # 老模型：用最近一次评估的按类别成绩
-            card = directory(project_id) / "models" / meta["version"] / "card.json"
+            card = root / "models" / meta["version"] / "card.json"
             evs = json.loads(card.read_text(encoding="utf-8")).get("evaluations", []) if card.is_file() else []
             for ev in reversed(evs):
                 if any(k.startswith("class/") for k in (ev.get("metrics") or {})):
@@ -705,10 +745,10 @@ def register_plots(router, engine, directory):
                 "per_class": [{"class": k, **v} for k, v in sorted(per.items(), key=lambda kv: kv[1].get("ap50", 0))]}
 
     @router.get("/projects/{project_id}/models/{version}/plots/{name}", tags=["hub"])
-    def plot_file(project_id: str, version: str, name: str):
+    def plot_file(project_id: str, version: str, name: str, annotation_task: str = ""):
         if name not in PLOT_NAMES:
             raise FileNotFoundError(name)
-        _, d = _run_dir(directory(project_id), version)
+        _, d = _run_dir(task_dir(engine, directory, project_id, annotation_task), version)
         if not d or not (d / name).is_file():
             raise FileNotFoundError(name)
         return FileResponse(d / name)
@@ -778,12 +818,13 @@ def register_io(router, engine, directory):
     from fastapi.responses import FileResponse
 
     @router.get("/projects/{project_id}/datasets/{version}/download", tags=["hub"])
-    def dataset_zip(project_id: str, version: str):
+    def dataset_zip(project_id: str, version: str, annotation_task: str = ""):
         """把数据集版本打包成 zip（检测/分割/旋转框/姿态 = images/ + labels/ + data.yaml；分类 = split/类别/图片），可直接给 Ultralytics 训练"""
-        d = directory(project_id) / "datasets" / Path(version).name
+        root = task_dir(engine, directory, project_id, annotation_task)
+        d = root / "datasets" / Path(version).name
         if not (d / "manifest.json").is_file():
             raise FileNotFoundError(version)
-        cache = Path(directory(project_id)) / "exports"
+        cache = Path(root) / "exports"
         cache.mkdir(exist_ok=True)
         out = cache / f"{d.name}.zip"
         if not out.is_file() or out.stat().st_mtime < (d / "manifest.json").stat().st_mtime:
@@ -800,17 +841,19 @@ def register_io(router, engine, directory):
         return FileResponse(out, filename=out.name, media_type="application/zip")
 
     @router.post("/projects/{project_id}/models/import", tags=["hub"])
-    async def import_model(project_id: str, file: UploadFile = File(...), version: str = Form(...), note: str = Form("")):
+    async def import_model(project_id: str, file: UploadFile = File(...), version: str = Form(...), note: str = Form(""),
+                           annotation_task: str = ""):
         """上传别处训练好的 Ultralytics .pt，登记成本子项目的一个模型版本（类别必须和子项目一致）"""
         import re
         from starlette.concurrency import run_in_threadpool
         from .models import register
-        d = directory(project_id)
+        d = task_dir(engine, directory, project_id, annotation_task)
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,79}", version):
             raise ValueError("版本名只能用字母、数字、点、下划线、短横线")
         if not (file.filename or "").lower().endswith(".pt"):
             raise ValueError("只支持 Ultralytics 的 .pt 权重")
-        cfg = engine.store.project(project_id)["config"]
+        cfg_task, cfg_classes = task_config(engine, project_id, annotation_task)   # 选了标注任务：类别要和任务的一致
+        cfg = {"task": cfg_task, "classes": cfg_classes}
         with tempfile.TemporaryDirectory() as tmp:
             f = Path(tmp) / "upload.pt"
             with open(f, "wb") as w:
@@ -968,8 +1011,8 @@ def dataset_stats(directory, version):
 
 def register_stats(router, engine, directory):
     @router.get("/projects/{project_id}/datasets/{version}/stats", tags=["hub"])
-    def stats(project_id: str, version: str):
-        return dataset_stats(directory(project_id), version)
+    def stats(project_id: str, version: str, annotation_task: str = ""):
+        return dataset_stats(task_dir(engine, directory, project_id, annotation_task), version)
 
 
 # ── 试一试：视频（断点续传上传 → 按间隔抽帧 → 逐帧识别，结果流式返回，分析也能断点续跑）──────
@@ -1159,15 +1202,16 @@ def register_try_video(router, engine, directory):
 
     @router.post("/projects/{project_id}/models/{version}/try-video", tags=["hub"])
     async def try_video(project_id: str, version: str, file: UploadFile | None = File(None), upload_id: str = Form(""),
-                        conf: float = Form(0.25), every_sec: float = Form(1.0), max_frames: int = Form(120), tile: bool = Form(False)):
+                        conf: float = Form(0.25), every_sec: float = Form(1.0), max_frames: int = Form(120), tile: bool = Form(False),
+                        annotation_task: str = ""):
         """视频识别，返回 NDJSON 流（每行一个 JSON：meta / frame / done / error）。
         两种给视频的方式：upload_id（先用 /uploads 断点续传，推荐，大文件、网络不稳时用）；或直接 file（小文件）。
         用 upload_id 时，同样的参数再请求一次会重放已分析的帧并从断开处继续。"""
-        d = directory(project_id)
+        d = task_dir(engine, directory, project_id, annotation_task)   # 模型、抽出的帧：当前标注任务
         max_frames = max(1, min(int(max_frames), 600))
         tmp_name, key = None, None
         if upload_id:
-            path, key = _video_file(d, upload_id), upload_id
+            path, key = _video_file(directory(project_id), upload_id), upload_id   # 上传的视频在子项目目录
         elif file is not None:
             suffix = Path(file.filename or "v.mp4").suffix.lower()
             if suffix not in _VIDEO_EXT:
@@ -1199,8 +1243,8 @@ def register_try_video(router, engine, directory):
         return StreamingResponse(gen(), media_type="application/x-ndjson", headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"})
 
     @router.get("/projects/{project_id}/try-video/{sid}/{i}.jpg", tags=["hub"])
-    def try_video_frame(project_id: str, sid: str, i: int):
-        f = directory(project_id) / ".try-video" / Path(sid).name / f"{int(i)}.jpg"
+    def try_video_frame(project_id: str, sid: str, i: int, annotation_task: str = ""):
+        f = task_dir(engine, directory, project_id, annotation_task) / ".try-video" / Path(sid).name / f"{int(i)}.jpg"
         if not f.is_file():
             raise FileNotFoundError("这一帧已过期（只保留最近 6 次视频试用）")
         return FileResponse(f, media_type="image/jpeg")

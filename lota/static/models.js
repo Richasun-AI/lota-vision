@@ -3,7 +3,67 @@
 const { h } = UI;
 const M = (m, k) => m?.[`metrics/${k}(B)`] ?? m?.[`metrics/${k}`] ?? m?.[k];
 const SCORE = (m) => M(m, "mAP50") ?? m?.["metrics/accuracy_top1"] ?? m?.["metrics/mIoU"];
-const COLORS = { map: "#1d6d52", p: "#1d5fd1", r: "#c2410c" };
+const COLORS = { map: "#1d6d52", p: "#1d5fd1", r: "#c2410c", strict: "#7c3aed" };
+// 更多 YOLO 指标（Ultralytics《YOLO 性能指标》）：只看 mAP50 不够，要一起看框准不准、误检、漏检、速度
+const MET = (m) => ({ p: M(m, "precision"), r: M(m, "recall"), f1: M(m, "F1"), map50: M(m, "mAP50"), map5095: M(m, "mAP50-95"),
+  map75: M(m, "mAP75"), ms: m?.["speed/inference"] });
+const GLOSSARY = [
+  ["mAP50", "综合得分：预测框和标注框重叠（IoU）≥ 0.5 就算对，各类别平均精度的平均。看“找没找到”。"],
+  ["mAP50-95", "严格得分：IoU 从 0.5 到 0.95 每隔 0.05 算一次再平均。框越贴合分越高，最能反映整体质量（模型选优主要看它）。"],
+  ["mAP75", "IoU ≥ 0.75 才算对：比 mAP50 严，专看框准不准。"],
+  ["精确率 P", "模型画的框里，真的是目标的比例。低 = 误检多（把不是目标的也框了）。"],
+  ["召回率 R", "该找的目标里，被找到的比例。低 = 漏检多。"],
+  ["F1", "精确率和召回率的调和平均，两者都高 F1 才高；看两者是否平衡。"],
+  ["推理耗时", "每张图模型推理用的毫秒数（不含读图、后处理），关系到能不能实时用。"],
+];
+function perClassOf(m) {   // class/<类别>/<指标> → [{class, ap50, ap, precision, recall, f1}]
+  const per = {};
+  for (const [k, v] of Object.entries(m || {})) if (k.startsWith("class/")) { const [, name, key] = k.split("/"); (per[name] = per[name] || { class: name })[key] = v; }
+  return Object.values(per).sort((a, b) => (a.ap50 ?? 0) - (b.ap50 ?? 0));
+}
+// 诊断：按 Ultralytics《模型评估与微调》《YOLO 性能指标》里的解读规则；判断用的阈值是经验值
+function diagnose(m, perClass = perClassOf(m)) {
+  const x = MET(m), tips = [];
+  if (x.map50 == null) return tips;
+  const add = (level, short, text) => tips.push({ level, short, text });
+  if (x.p != null && x.r != null && x.p < x.r - 0.12 && x.p < 0.75)
+    add("warn", "误检多：精确率明显低于召回率", `精确率 ${UI.pct(x.p)} 明显低于召回率 ${UI.pct(x.r)}：模型把不是目标的东西也框了（误检）。先把使用时的置信度阈值调高（看 F1 曲线最高点对应的阈值）；` +
+      "经常被误认的背景，多加一些“图里没有目标、选 No target”的图。");
+  if (x.p != null && x.r != null && x.r < x.p - 0.12 && x.r < 0.75)
+    add("warn", "漏检多：召回率明显低于精确率", `召回率 ${UI.pct(x.r)} 明显低于精确率 ${UI.pct(x.p)}：该找的目标没找全（漏检）。多标这类目标，尤其是小的、被遮挡的、光线差的；` +
+      "目标小就把图像大小调到 960；使用时可以把置信度阈值调低一点。");
+  if (x.map5095 != null && x.map50 >= 0.4 && x.map5095 < x.map50 * 0.5)
+    add("warn", "能找到但框不准：严格得分远低于综合得分", `严格得分 mAP50-95 ${UI.pct(x.map5095)} 不到综合得分 mAP50 ${UI.pct(x.map50)} 的一半：模型找得到目标，但框的位置、大小和标注差得多。` +
+      "先统一标注口径（框要贴边；成片的目标是整片框还是分块框要定死），用数据集页的「找标注错误」查一遍。");
+  if (x.map50 < 0.5)
+    add("warn", "整体偏低", `综合得分 ${UI.pct(x.map50)} 偏低：先查标注是否一致（「找标注错误」），再加数据；数据够了可以试「自动调参」。`);
+  const avg = perClass.length ? perClass.reduce((a, c) => a + (c.ap50 ?? 0), 0) / perClass.length : null;
+  const best = Math.max(...perClass.map((c) => c.ap50 ?? 0));
+  for (const c of perClass) if (avg != null && perClass.length > 1 && c.ap50 != null && (c.ap50 < avg - 0.15 || (c.ap50 < 0.4 && c.ap50 < best - 0.2)))
+    add("warn", `类别「${c.class}」明显偏弱`, `类别「${c.class}」AP50 只有 ${UI.pct(c.ap50)}，比各类平均 ${UI.pct(avg)} 低很多：这一类最难，优先给它多标数据、检查它的标注是否一致。`);
+  if (!tips.length && x.map50 >= 0.7)
+    add("ok", "各项指标正常", "精确率、召回率比较平衡，没有明显偏弱的类别。想再提高，加难例（误检、漏检的图）比加普通图更有效。");
+  else if (!tips.length)
+    add("info", "成绩中等，没有单一短板", `综合得分 ${UI.pct(x.map50)}、严格得分 ${UI.pct(x.map5095)}，精确率和召回率差不多：不是某一项特别差，而是整体还不够。` +
+      "按效果从大到小：① 用「找标注错误」统一标注口径；② 补误检、漏检的难例图；③ 数据够多后跑「自动调参」；④ 换大一号的模型（s→m）。");
+  return tips;
+}
+function metricGrid(m) {
+  const x = MET(m);
+  const cell = (label, v, help, fmt = UI.pct) => h("div", { title: help, style: { background: "var(--panel-2)", borderRadius: "8px", padding: "4px 8px" } },
+    h("div", { class: "tiny muted" }, label), h("b", {}, v == null ? "—" : fmt(v)));
+  return h("div", { style: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "6px", margin: "6px 0" } },
+    cell("精确率 P", x.p, GLOSSARY[3][1]), cell("召回率 R", x.r, GLOSSARY[4][1]), cell("F1", x.f1, GLOSSARY[5][1]),
+    cell("mAP75", x.map75, GLOSSARY[2][1]), cell("mAP50-95", x.map5095, GLOSSARY[1][1]),
+    cell("推理耗时", x.ms, GLOSSARY[6][1], (v) => v.toFixed(1) + " ms/张"));
+}
+// 按数据量推荐轮数：图少多训几轮，图多少训几轮；接着已训好的模型训，轮数减半。都配早停，不会白跑
+function recommendEpochs(nTrain, continuing) {
+  const n = nTrain || 0;
+  const base = n < 300 ? 150 : n < 1000 ? 120 : n < 3000 ? 100 : 80;
+  const epochs = continuing ? Math.max(30, Math.round(base / 2)) : base;
+  return { epochs, patience: Math.max(20, Math.round(epochs / 4)) };
+}
 const ALIAS_TEXT = { production: "正式使用", latest: "最新", candidate: "候选" };
 let S = null;   // summary
 let jobsTimer = null;
@@ -32,7 +92,7 @@ async function render() {
   app.replaceChildren(
     h("div", { class: "page-head" },
       h("div", {}, h("h1", {}, "模型中心"), h("p", {}, `「${info?.config?.name || pid}」的所有模型版本：成绩、正在使用哪个、导出到手机。分数越高越好；“正式使用”的模型会被预标注、找图和推理默认使用。`)),
-      h("div", { class: "row" }, h("a", { class: "btn", href: "/datasets" }, "看数据集"), h("button", { class: "btn", onclick: compareDlg }, "A/B 对比"), h("button", { class: "btn", onclick: importDlg }, "导入外部模型"),
+      h("div", { class: "row" }, UI.taskPicker(pid, render) || "", h("a", { class: "btn", href: "/datasets" }, "看数据集"), h("button", { class: "btn", onclick: compareDlg }, "A/B 对比"), h("button", { class: "btn", onclick: tuneDlg, title: "试多组超参数，挑最好的，以后训练默认用" }, "自动调参"), h("button", { class: "btn", onclick: importDlg }, "导入外部模型"),
         h("button", { class: "btn primary lg", onclick: () => trainWizard() }, "＋ 训练新模型"))),
     h("div", { class: "grid k4" },
       kpi("正式使用中", prod ? prod.version : "还没有", prod ? `综合得分 ${UI.pct(SCORE(prod.metrics))}` : "训练后点“设为正式使用”"),
@@ -59,6 +119,7 @@ function trendCard(models) {
     h("div", { class: "row between" }, h("h3", {}, "每一版的成绩"), h("span", { class: "muted small" }, "看是不是一版比一版好")),
     UI.lineChart([
       { name: "综合得分 mAP50", color: COLORS.map, points: asc.map((m) => [m.version, SCORE(m.metrics)]) },
+      { name: "严格得分 mAP50-95", color: COLORS.strict, points: asc.filter((m) => M(m.metrics, "mAP50-95") != null).map((m) => [m.version, M(m.metrics, "mAP50-95")]) },
       { name: "框得准（精确率）", color: COLORS.p, points: asc.map((m) => [m.version, M(m.metrics, "precision")]) },
       { name: "找得全（召回率）", color: COLORS.r, points: asc.map((m) => [m.version, M(m.metrics, "recall")]) }]));
 }
@@ -77,12 +138,15 @@ function modelCard(pid, m) {
     ...(met["metrics/mIoU"] != null ? [scoreBar("平均交并比 mIoU", "语义分割：预测区域和标注区域重合的程度", met["metrics/mIoU"])] : m.task === "classify" ? [
       scoreBar("准确率", "Top-1：第一名就猜对的比例", met["metrics/accuracy_top1"]),
       scoreBar("前五名命中", "Top-5：正确答案在前 5 个候选里的比例", met["metrics/accuracy_top5"])] : [
-      scoreBar("综合得分", "mAP50：总成绩", SCORE(met)),
-      scoreBar("框得准", "精确率 Precision：画的框里有多少是对的", M(met, "precision")),
-      scoreBar("找得全", "召回率 Recall：该找的找到了多少", M(met, "recall"))]),
+      scoreBar("综合得分 mAP50", GLOSSARY[0][1], SCORE(met)),
+      scoreBar("严格得分 mAP50-95", GLOSSARY[1][1], M(met, "mAP50-95")),
+      metricGrid(met)]),
     h("div", { class: "small muted", style: { marginTop: "8px" } },
       `数据集 ${m.dataset_version || "—"} · ${origin}${ep ? ` · ${ep} 轮` : ""} · ${UI.when(m.created_at)} · ${UI.bytes(m.size)}`),
     m.note ? h("div", { class: "small", style: { marginTop: "4px", color: "var(--ink-2)" } }, "📝 " + m.note) : null,
+    ...diagnose(met).slice(0, 2).map((t) => h("div", { class: "small", title: t.text, style: { marginTop: "4px", color: t.level === "ok" ? "#1d6d52" : t.level === "info" ? "#1d5fd1" : "#b45309" } },
+      (t.level === "ok" ? "✓ " : t.level === "info" ? "ℹ " : "⚠ ") + t.short + (t.level === "ok" ? "" : "（点“看图表 → 诊断与建议”看怎么改）"))),
+    (m.strategy || []).length ? h("div", { class: "tiny muted", style: { marginTop: "4px" } }, "训练参数：" + m.strategy.join("；")) : null,
     last ? h("div", { class: "small", style: { marginTop: "4px" } }, `最近评估：${last.dataset_version}/${last.split === "test" ? "测试集" : "验证集"} 综合 ${UI.pct(SCORE(last.metrics))} · ${last.at}`) : null,
     m.exports.length ? h("div", { class: "row small", style: { marginTop: "6px" } }, "已导出：", ...m.exports.map((e) =>
       h("a", { href: "#", onclick: (ev) => { ev.preventDefault(); download(pid, m.version, e.name); } }, `${e.name}（${UI.bytes(e.size)}）`))) : null,
@@ -116,7 +180,7 @@ const SEG_ARCHS = [["seg:deeplabv3_mobilenet_v3_large", "DeepLabV3-MobileNet（�
 const TASK_SUFFIX = { detect: "", segment: "-seg", classify: "-cls", pose: "-pose", obb: "-obb" };
 
 async function trainWizard(preDs) {
-  const pid = UI.project(), task = UI.projectInfo(pid)?.config?.task || "detect";
+  const pid = UI.project(), task = UI.taskInfo(pid).task;   // 当前标注任务的类型
   const [{ datasets }, bases, ms] = await Promise.all([UI.api(`/api/projects/${pid}/hub/datasets`), UI.api(`/api/projects/${pid}/hub/base-weights?task=${task}`), UI.api(`/api/projects/${pid}/hub/models`)]);
   const st = S.settings, tr = st.train, latest = ms.aliases.latest;
   const field = (label, el, help) => h("div", { class: "field" }, h("label", {}, label), el, help ? h("div", { class: "help" }, help) : null);
@@ -143,8 +207,16 @@ async function trainWizard(preDs) {
   // 3. 参数
   const epochs = h("input", { class: "input", type: "number", min: 1, max: 1000, value: st.presets[tr.preset] || 80 });
   const chips = h("div", { class: "row", style: { gap: "6px", marginTop: "4px" } });
-  const drawChips = () => chips.replaceChildren(...[["quick", "试一下"], ["standard", "标准"], ["thorough", "充分"]].map(([k, t]) =>
+  const trainImages = () => { const d = datasets.find((x) => x.version === dsSel.value);
+    return d ? (d.counts?.train || Math.round(d.image_total * (1 - st.split.val - st.split.test))) : Math.round(newCount * (1 - st.split.val - st.split.test)); };
+  const rec = () => recommendEpochs(trainImages(), baseSel.value === "latest");
+  const drawChips = () => chips.replaceChildren(
+    ...(kind() === "yolo" ? [h("button", { class: "btn sm", type: "button", title: "按训练图张数推荐；配早停，不进步会提前结束",
+      onclick: () => { epochs.value = rec().epochs; epochs.dataset.touched = "1"; update(); } }, `按数据量推荐 ${rec().epochs}`)] : []),
+    ...[["quick", "试一下"], ["standard", "标准"], ["thorough", "充分"]].map(([k, t]) =>
     h("button", { class: "btn sm ghost", type: "button", onclick: () => { epochs.value = scaleEpochs(st.presets[k]); epochs.dataset.touched = "1"; update(); } }, `${t} ${scaleEpochs(st.presets[k])}`)));
+  const useTuned = h("input", { type: "checkbox", checked: !!S.tuned });
+  const stratEl = h("div", { class: "callout small" });
   const batch = h("select", { class: "select" }, opt("-1", "自动（按显存挑，推荐）"), ...[4, 8, 16, 32, 64].map((n) => opt(String(n), String(n))));
   batch.value = "-1";
   const imgsz = h("select", { class: "select" }, ...[[320, "320 · 很快，大目标"], [480, "480"], [640, "640 · 常用（推荐）"], [960, "960 · 小目标"], [1280, "1280 · 很小的目标，慢"]].map(([v, t]) => opt(String(v), t)));
@@ -156,15 +228,24 @@ async function trainWizard(preDs) {
   function scaleEpochs(n) { return kind() === "tv" ? Math.max(10, Math.round(n / 4)) : kind() === "seg" ? Math.max(10, Math.round(n / 3)) : n; }
   const sizeOf = () => baseSel.value.startsWith("base:") ? baseSel.value.split(":")[2] : tr.size;
   const defaultName = () => kind() === "yolo" ? st.naming.model.replace("{size}", sizeOf()) : kind() === "tv" ? st.naming.model.replace("{size}", baseSel.value.slice(3).replace(/_/g, "")) : "{dataset}-" + baseSel.value.slice(4).split("_")[0] + "-v{n}";
-  const dsName = () => dsSel.value === "__new__" ? st.naming.dataset.replace("{project}", pid).replace("{n}", "N") : dsSel.value;
+  const dsName = () => dsSel.value === "__new__" ? st.naming.dataset.replace("{project}", (UI.task(pid) ? pid + "-" + UI.task(pid) : pid)).replace("{n}", "N") : dsSel.value;
 
   // 在本地训练：一行命令（不含任何密钥）
   const cmd = h("pre", { class: "mono small", style: { whiteSpace: "pre-wrap", background: "#0e2620", color: "#d6e7df", padding: "12px", borderRadius: "10px", margin: 0 } });
   const localBox = h("div", { class: "form" });
   function update() {
-    if (!epochs.dataset.touched) epochs.value = scaleEpochs(st.presets[tr.preset] || 80);
+    if (!epochs.dataset.touched) epochs.value = kind() === "yolo" ? rec().epochs : scaleEpochs(st.presets[tr.preset] || 80);
     drawChips();
     if (!name.dataset.touched) name.value = defaultName();
+    const r = rec(), cont = baseSel.value === "latest";
+    stratEl.replaceChildren(kind() !== "yolo" ? "" : h("div", {},
+      h("b", {}, "参数会这样自动选："),
+      h("ul", { style: { margin: "4px 0 0", paddingLeft: "18px" } },
+        h("li", {}, `轮数：约 ${trainImages()} 张训练图，推荐 ${r.epochs} 轮；早停 ${Math.max(tr.patience || 0, Math.round(Number(epochs.value || r.epochs) / 4), 20)} 轮——成绩这么多轮不进步就提前结束，轮数设多了不浪费。`),
+        h("li", {}, cont ? "接着已训好的模型训：用小学习率微调（AdamW，lr0=0.0005，热身 1 轮，余弦衰减），不冲掉已经学到的。"
+          : "从官方底座训：优化器和学习率由 Ultralytics 自动选" + (S.tuned ? "；勾选下面的选项就用自动调参搜出来的参数。" : "；想更好可以先跑「自动调参」。")),
+        S.tuned ? h("li", {}, h("label", {}, useTuned, ` 用自动调参结果（${S.tuned.at}，在 ${S.tuned.dataset_version} 上试了 ${S.tuned.tried || S.tuned.iterations} 组${S.tuned.best_fitness != null ? "，最好得分 " + UI.pct(S.tuned.best_fitness) : ""}）`)) : null,
+        h("li", {}, "手动填了的参数（详细设置里）一律以你填的为准。"))));
     const d = datasets.find((x) => x.version === dsSel.value);
     dsCardEl.replaceChildren(d
       ? h("div", { class: "row between" }, h("div", {}, h("b", { class: "mono" }, d.version), h("div", { class: "small muted" }, `${d.image_total} 张图片 · ${(d.classes || []).length} 个类别 · ${d.box_total} 个标注`)),
@@ -216,9 +297,10 @@ async function trainWizard(preDs) {
     field("基础模型", baseSel, null), baseHelp,
     field("数据集", dsSel), dsCardEl,
     h("div", { class: "grid", style: { gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" } },
-      field("训练轮数 epochs", h("div", {}, epochs, chips), "一般 50–150；数据少就多训几轮"),
+      field("训练轮数 epochs", h("div", {}, epochs, chips), "按数据量推荐；有早停，设多了会提前结束"),
       field("批大小 batch", batch, "自动 = 按显存挑；报显存不足就选 8 或 4"),
       field("图像大小 imgsz", imgsz, "目标很小就选 960")),
+    stratEl,
     field("模型名称", name, null), nameHelp,
     field("在哪训练", where), whereBody,
     UI.pitfall([
@@ -241,7 +323,7 @@ async function trainWizard(preDs) {
       if (!(n >= 1)) throw new Error("训练轮数要填正整数");
       if (ds === "__new__" && !S.accepted_annotations) throw new Error("还没有已复核的标注，先去 Label Studio 标注并回收");
       if (!/^[A-Za-z0-9{][A-Za-z0-9_.{}-]*$/.test(name.value)) throw new Error("模型名称只能用字母、数字、点、下划线、短横线（可以带 {dataset}、{n}）");
-      const adv = { epochs: n, imgsz: sz, batch: b === -1 ? null : b, patience: null, lr0: null };
+      const adv = { epochs: n, imgsz: sz, batch: b === -1 ? null : b, patience: Math.max(tr.patience || 0, Math.round(n / 4), 20), lr0: null, use_tuned: useTuned.checked };
       if (kind() === "seg") return startSemseg(pid, { ds, arch: baseSel.value.slice(4), preset: tr.preset, adv, name: name.value });
       if (kind() === "tv") return startClassic(pid, { ds, arch: baseSel.value.slice(3), preset: tr.preset, adv: { ...adv, imgsz: null }, name: name.value });
       const fb = baseSel.value === "latest" ? bases.find((x) => x.ok && x.family === tr.family && x.size === tr.size) || bases.find((x) => x.ok) : bases.find((x) => `base:${x.family}:${x.size}` === baseSel.value);
@@ -255,9 +337,9 @@ async function trainWizard(preDs) {
 // ── 详细训练向导（专业参数）──────────────────────────────────────────────────
 async function trainWizardAdvanced() {
   const pid = UI.project();
-  const [{ datasets }, bases, ms] = await Promise.all([UI.api(`/api/projects/${pid}/hub/datasets`), UI.api(`/api/projects/${pid}/hub/base-weights?task=${UI.projectInfo(pid)?.config?.task || "detect"}`), UI.api(`/api/projects/${pid}/hub/models`)]);
+  const [{ datasets }, bases, ms] = await Promise.all([UI.api(`/api/projects/${pid}/hub/datasets`), UI.api(`/api/projects/${pid}/hub/base-weights?task=${UI.taskInfo(pid).task || "detect"}`), UI.api(`/api/projects/${pid}/hub/models`)]);
   const st = S.settings, tr = st.train;
-  const hasLatest = !!ms.aliases.latest, task = UI.projectInfo(pid)?.config?.task || "detect";
+  const hasLatest = !!ms.aliases.latest, task = UI.taskInfo(pid).task;
   const radio = (name, value, title, desc, checked) => h("label", {}, h("input", { type: "radio", name, value, checked }), h("b", {}, title), h("span", {}, desc));
   const newOne = S.new_since_last_dataset > 0 || !datasets.length;
   const dsBox = h("div", { class: "seg", style: { gridAutoFlow: "row" } },
@@ -293,7 +375,7 @@ async function trainWizardAdvanced() {
       h("div", { class: "grid k2", style: { marginTop: "10px" } },
         field("模型系列", famSel), field("图片尺寸", adv.imgsz, "越大越能看清小目标，但更慢；640 常用"),
         field("每批张数", adv.batch, "显存 8G 用 8；报显存不足就改小"), field("提前停止（轮）", adv.patience, "这么多轮没进步就停"),
-        field("学习率 lr0（可空）", adv.lr0, "空 = 自动；接着训时可设 0.001"), field("轮数（可空）", adv.epochs, "填了就覆盖上面的训练强度")),
+        field("学习率 lr0（可空）", adv.lr0, "空 = 自动：接着训用 AdamW 0.0005 微调；从底座训由 Ultralytics 自动选（有自动调参结果就用它）。填了会自动配上优化器"), field("轮数（可空）", adv.epochs, "填了就覆盖上面的训练强度")),
       h("div", { class: "small muted" }, "数据增强、数据划分比例、命名规则在 ", h("a", { href: "/settings" }, "项目设置"), " 里统一改。")),
     h("div", { class: "callout" }, "训练在服务器显卡上跑，期间可以继续在 Label Studio 标注。训练完会自动评估并设为「最新」；确认效果好，再在卡片上点「设为正式使用」。"));
   UI.modal("训练新模型", body, [{ label: "取消" }, { label: "开始训练", kind: "primary", run: async () => {
@@ -321,14 +403,14 @@ async function startTraining(pid, o) {
     let ds = o.ds;
     if (ds === "__new__") {
       panel.step("打包最新标注为新数据集…");
-      const pr = await UI.runTool(pid, "dataset.publish", { version: st.naming.dataset.replace("{project}", pid), val_fraction: st.split.val, test_fraction: st.split.test, seed: st.split.seed });
+      const pr = await UI.runTool(pid, "dataset.publish", { version: st.naming.dataset.replace("{project}", (UI.task(pid) ? pid + "-" + UI.task(pid) : pid)), val_fraction: st.split.val, test_fraction: st.split.test, seed: st.split.seed });
       ds = pr.version; panel.step(`数据集 ${ds}：训练 ${pr.counts?.train} / 验证 ${pr.counts?.val} / 测试 ${pr.counts?.test || 0}`);
     }
     const args = {
       dataset_version: ds, model_version: o.name || st.naming.model.replace("{size}", o.size), weights: o.base,
       epochs: o.adv.epochs || st.presets[o.preset], imgsz: o.adv.imgsz || tr.imgsz, batch: o.adv.batch || tr.batch,
       device: tr.device, workers: tr.workers, patience: o.adv.patience ?? tr.patience, ...(o.adv.lr0 ? { lr0: o.adv.lr0 } : {}),
-      ...(o.from === "latest" ? { continue_from: "latest" } : {}), ...st.augment };
+      ...(o.from === "latest" ? { continue_from: "latest" } : {}), ...st.augment, use_tuned: o.adv.use_tuned !== false };
     panel.step(`开始训练（${args.epochs} 轮，模型 ${o.size}）…训练期间可以关掉这个窗口`);
     const t0 = Date.now(); let last = 0;
     const out = await UI.runTool(pid, "model.train", args, { onProgress: async () => {
@@ -339,11 +421,14 @@ async function startTraining(pid, o) {
         const lastPt = g.points[g.points.length - 1];
         panel.note(`第 ${g.epochs_done} / ${g.epochs_total || args.epochs} 轮 · 当前综合得分 ${UI.pct(lastPt.map50)} · 已用 ${mins} 分钟`);
         panel.chart(UI.lineChart([{ name: "综合得分 mAP50", color: "#1d6d52", points: g.points.map((p) => [p.epoch, p.map50]) },
+          { name: "严格得分 mAP50-95", color: COLORS.strict, points: g.points.filter((p) => p.map5095 != null).map((p) => [p.epoch, p.map5095]) },
           { name: "框得准", color: "#1d5fd1", points: g.points.map((p) => [p.epoch, p.precision]) },
           { name: "找得全", color: "#c2410c", points: g.points.map((p) => [p.epoch, p.recall]) }], { height: 180 }));
       } else panel.note(`准备数据、加载模型中… 已用 ${mins} 分钟`);
     } });
-    panel.step(`训练完成：${out.version}，综合得分 ${UI.pct(SCORE(out.metrics))}`);
+    { const x = MET(out.metrics);
+      panel.step(`训练完成：${out.version}，mAP50 ${UI.pct(x.map50)} · mAP50-95 ${UI.pct(x.map5095)} · 精确率 ${UI.pct(x.p)} · 召回率 ${UI.pct(x.r)} · F1 ${UI.pct(x.f1)}`);
+      if ((out.strategy || []).length) panel.step("训练参数：" + out.strategy.join("；")); }
     await UI.runTool(pid, "model.alias", { alias: "latest", version: out.version });
     panel.step("已设为「最新」。确认效果后可在卡片上点「设为正式使用」。");
     panel.done(); render();
@@ -357,7 +442,7 @@ async function startSemseg(pid, o) {
     let ds = o.ds;
     if (ds === "__new__") {
       panel.step("打包最新标注为新数据集…");
-      const pr = await UI.runTool(pid, "dataset.publish", { version: st.naming.dataset.replace("{project}", pid), val_fraction: st.split.val, test_fraction: st.split.test, seed: st.split.seed });
+      const pr = await UI.runTool(pid, "dataset.publish", { version: st.naming.dataset.replace("{project}", (UI.task(pid) ? pid + "-" + UI.task(pid) : pid)), val_fraction: st.split.val, test_fraction: st.split.test, seed: st.split.seed });
       ds = pr.version; panel.step(`数据集 ${ds}：训练 ${pr.counts?.train} / 验证 ${pr.counts?.val}`);
     }
     const epochs = o.adv.epochs || Math.max(10, Math.round(st.presets[o.preset] / 3));
@@ -377,7 +462,7 @@ async function startClassic(pid, o) {
     let ds = o.ds;
     if (ds === "__new__") {
       panel.step("打包最新标注为新数据集…");
-      const pr = await UI.runTool(pid, "dataset.publish", { version: st.naming.dataset.replace("{project}", pid), val_fraction: st.split.val, test_fraction: st.split.test, seed: st.split.seed });
+      const pr = await UI.runTool(pid, "dataset.publish", { version: st.naming.dataset.replace("{project}", (UI.task(pid) ? pid + "-" + UI.task(pid) : pid)), val_fraction: st.split.val, test_fraction: st.split.test, seed: st.split.seed });
       ds = pr.version; panel.step(`数据集 ${ds}：训练 ${pr.counts?.train} / 验证 ${pr.counts?.val} / 测试 ${pr.counts?.test || 0}`);
     }
     const epochs = o.adv.epochs || Math.max(10, Math.round(st.presets[o.preset] / 4));
@@ -588,7 +673,7 @@ function tryIt(pid, m) {
         const fd = new FormData();
         fd.append("upload_id", uid); fd.append("conf", conf.value); fd.append("every_sec", every.value); fd.append("max_frames", maxF.value); fd.append("tile", tile.checked ? "true" : "false");
         const x = live = new XMLHttpRequest();
-        x.open("POST", `/api/projects/${pid}/models/${m.version}/try-video`);
+        x.open("POST", UI.withTask(`/api/projects/${pid}/models/${m.version}/try-video`));
         const tk = UI.store.get("lota-token"); if (tk) x.setRequestHeader("Authorization", "Bearer " + tk);
         let seen = 0, gotDone = false, gotErr = false;
         const consume = () => {
@@ -804,16 +889,29 @@ async function plotsDlg(pid, m) {
   const d = await UI.api(`/api/projects/${pid}/models/${m.version}/plots`);
   const view = h("div", { style: { minHeight: "320px" } }), tabs = h("div", { class: "tabs" });
   const show = async (it) => {
+    if (it === "diagnose") {
+      const met = m.metrics || {}, tips = diagnose(met, d.per_class);
+      view.replaceChildren(h("div", {},
+        metricGrid(met),
+        tips.length ? h("div", {}, h("h4", {}, "诊断与建议"), ...tips.map((t) => h("div", { class: "callout small", style: { marginTop: "6px", borderColor: t.level === "ok" ? "#1d6d52" : "#b45309" } },
+          h("b", {}, (t.level === "ok" ? "✓ " : t.level === "info" ? "ℹ " : "⚠ ") + t.short), h("div", {}, t.text)))) : h("div", { class: "empty" }, "还没有成绩，评估一次就有。"),
+        h("h4", { style: { marginTop: "12px" } }, "这些指标是什么意思"),
+        h("table", { class: "table" }, ...GLOSSARY.map(([k, v]) => h("tr", {}, h("td", { class: "mono", style: { whiteSpace: "nowrap" } }, k), h("td", { class: "small" }, v)))),
+        h("p", { class: "tiny muted" }, "判断规则参考 Ultralytics《YOLO 性能指标》《模型评估与微调》；“明显偏低”等阈值是经验值。")));
+      return;
+    }
     if (it === "per_class") {
       const rows = d.per_class;
       view.replaceChildren(rows.length ? h("div", {},
         h("p", { class: "small muted" }, "从低到高排：最上面的类别最弱，优先给它多标数据、检查标注是否一致。"),
-        h("table", { class: "table" }, h("tr", {}, h("th", {}, "类别"), h("th", {}, "综合得分 AP50"), h("th", { class: "num" }, "框得准"), h("th", { class: "num" }, "找得全")),
+        h("table", { class: "table" }, h("tr", {}, h("th", {}, "类别"), h("th", {}, "综合得分 AP50"), h("th", { class: "num" }, "严格 AP50-95"),
+          h("th", { class: "num" }, "精确率 P"), h("th", { class: "num" }, "召回率 R"), h("th", { class: "num" }, "F1")),
           ...rows.map((r) => h("tr", {}, h("td", { class: "mono" }, r.class),
             h("td", {}, h("div", { class: "score", style: { gridTemplateColumns: "1fr 54px", margin: 0 } },
               h("div", { class: "meter" + (r.ap50 >= 0.7 ? "" : r.ap50 >= 0.45 ? " warn" : " danger") }, h("i", { style: { width: Math.round((r.ap50 || 0) * 100) + "%" } })),
               h("span", { class: "v" }, UI.pct(r.ap50)))),
-            h("td", { class: "num" }, UI.pct(r.precision)), h("td", { class: "num" }, UI.pct(r.recall))))))
+            h("td", { class: "num" }, UI.pct(r.ap)), h("td", { class: "num" }, UI.pct(r.precision)), h("td", { class: "num" }, UI.pct(r.recall)),
+            h("td", { class: "num" }, UI.pct(r.f1 ?? (r.precision + r.recall ? 2 * r.precision * r.recall / (r.precision + r.recall) : null)))))))
         : h("div", { class: "empty" }, "这个模型没有按类别的成绩（训练于本功能上线前，或是分类模型）。重新评估一次就会有。"));
       return;
     }
@@ -821,22 +919,59 @@ async function plotsDlg(pid, m) {
     const u = await UI.blobUrl(`/api/projects/${pid}/models/${m.version}/plots/${it.name}`);
     view.replaceChildren(h("img", { src: u, style: { width: "100%", borderRadius: "10px", border: "1px solid var(--line)" } }));
   };
-  const items = [...d.plots, { name: "per_class", title: "按类别成绩" }];
+  const items = [{ name: "diagnose", title: "诊断与建议" }, ...d.plots, { name: "per_class", title: "按类别成绩" }];
   items.forEach((it, i) => {
     const b = h("button", { class: i === 0 ? "on" : "" }, it.title.replace(/（.*）/, ""));
     b.title = it.title;
-    b.onclick = () => { [...tabs.children].forEach((x) => x.classList.toggle("on", x === b)); show(it.name === "per_class" ? "per_class" : it); };
+    b.onclick = () => { [...tabs.children].forEach((x) => x.classList.toggle("on", x === b)); show(["per_class", "diagnose"].includes(it.name) ? it.name : it); };
     tabs.append(b);
   });
   UI.modal(`${m.version} 的训练图表`, h("div", {}, tabs, view,
     h("div", { class: "callout small", style: { marginTop: "10px" } }, "怎么看：混淆矩阵对角线越亮越好，非对角线亮的格子 = 容易认错的类别；PR 曲线越靠右上越好；F1 曲线最高点对应的置信度是推荐阈值；验证集预测和人工标注对照着看，能直接看出漏检和误检。")), [], { wide: true });
-  if (items.length) show(items[0].name === "per_class" ? "per_class" : items[0]);
+  if (items.length) show(["per_class", "diagnose"].includes(items[0].name) ? items[0].name : items[0]);
 }
 
 
+// ── 自动调参（Ultralytics Tuner：试多组学习率、损失权重、数据增强，挑 fitness 最高的一组）────────────
+async function tuneDlg() {
+  const pid = UI.project(), ti = UI.taskInfo(pid), st = S.settings, tr = st.train;
+  const [{ datasets }, bases, g] = await Promise.all([UI.api(`/api/projects/${pid}/hub/datasets`),
+    UI.api(`/api/projects/${pid}/hub/base-weights?task=${ti.task}`), UI.api(`/api/projects/${pid}/train-progress`).catch(() => ({}))]);
+  if (!datasets.length) { UI.toast("先在数据集页打包一个数据集：自动调参要在同一个固定的数据集上比较各组参数", true); return; }
+  const opt = (v, t) => h("option", { value: v }, t);
+  const ds = h("select", { class: "select" }, ...datasets.map((d) => opt(d.version, `${d.version}（${d.image_total} 张）`)));
+  const base = h("select", { class: "select" }, ...bases.filter((b) => b.ok).map((b) => opt(b.path, `${b.family}${b.size}`)));
+  const def = bases.find((b) => b.ok && b.family === tr.family && b.size === tr.size); if (def) base.value = def.path;
+  const iters = h("input", { class: "input", type: "number", min: 3, max: 300, value: 30 });
+  const eps = h("input", { class: "input", type: "number", min: 3, max: 300, value: 30 });
+  const last = (g.points || []).slice(-1)[0], spe = last?.time && g.epochs_done ? last.time / g.epochs_done : null;   // 上次训练每轮秒数
+  const est = h("div", { class: "callout small" });
+  const upd = () => {
+    const total = Number(iters.value) * Number(eps.value);
+    est.textContent = `一共要训 ${iters.value} 组 × ${eps.value} 轮 = ${total} 轮。` + (spe ? `按上次训练每轮约 ${Math.round(spe)} 秒估算，大约 ${(total * spe / 3600).toFixed(1)} 小时。` : "") +
+      "跑的时候显卡被占满，别同时训练别的模型；可以关掉页面，跑完后训练会自动用最好的参数。";
+  };
+  iters.oninput = eps.oninput = upd; upd();
+  const field = (label, el, help) => h("div", { class: "field" }, h("label", {}, label), el, help ? h("div", { class: "help" }, help) : null);
+  const cur = S.tuned;
+  UI.modal("自动调参", h("div", { class: "form" },
+    h("p", {}, `在一个数据集上试多组超参数（学习率、动量、损失权重、颜色/翻转/马赛克等数据增强），每组训一遍，按 fitness（以 mAP50-95 为主）挑最好的一组。` +
+      `结果存在${ti.id ? `标注任务「${ti.name}」` : "子项目"}里，以后“从底座训”默认用它。`),
+    cur ? h("details", {}, h("summary", {}, `已有调参结果：${cur.at} · 数据集 ${cur.dataset_version} · 试了 ${cur.tried || cur.iterations} 组` + (cur.best_fitness != null ? ` · 最好 ${UI.pct(cur.best_fitness)}` : "")),
+      h("div", { class: "mono tiny" }, Object.entries(cur.hyp || {}).map(([k, v]) => `${k}=${Number(v).toPrecision(3)}`).join("  "))) : null,
+    h("div", { class: "grid k2" }, field("数据集", ds, "用最新、最大的那一版"), field("从哪个底座开始", base),
+      field("试多少组", iters, "一般 20–50 组；越多越可能找到好参数，也越慢"), field("每组训多少轮", eps, "20–50 轮；太少看不出好坏")),
+    est), [{ label: "取消" }, { label: "开始自动调参", kind: "primary", run: async () => {
+      const body = { dataset_version: ds.value, weights: base.value, iterations: Number(iters.value), epochs: Number(eps.value),
+        imgsz: tr.imgsz, batch: tr.batch > 0 ? tr.batch : 8, device: tr.device, workers: tr.workers, ...(UI.task(pid) ? { annotation_task: UI.task(pid) } : {}) };
+      await UI.api(`/api/projects/${pid}/tools/model.tune`, { method: "POST", body });
+      UI.toast("已开始自动调参，在下方“任务记录”看进度；跑完后训练向导会自动用最好的参数", false, 8000);
+    } }], { wide: true });
+}
+
 // ── 导入外部模型（别处训练好的 Ultralytics .pt）──────────────────────────────────
 function importDlg() {
-  const pid = UI.project(), info = UI.projectInfo(pid)?.config || {};
+  const pid = UI.project(), info = UI.taskInfo(pid);   // 类别、任务类型按当前标注任务校验
   const file = h("input", { type: "file", accept: ".pt" });
   const ver = h("input", { class: "input", value: "import-" + new Date().toISOString().slice(0, 10).replace(/-/g, "") + "-v1" });
   const note = h("input", { class: "input", placeholder: "如：旧版检测模型 yolov8s-old" });
@@ -848,7 +983,7 @@ function importDlg() {
     [{ label: "取消" }, { label: "导入", kind: "primary", run: () => new Promise((resolve, reject) => {
       if (!file.files[0]) return reject(new Error("先选择 .pt 文件"));
       const fd = new FormData(); fd.append("file", file.files[0]); fd.append("version", ver.value.trim()); fd.append("note", note.value);
-      const xhr = new XMLHttpRequest(); xhr.open("POST", `/api/projects/${pid}/models/import`);
+      const xhr = new XMLHttpRequest(); xhr.open("POST", UI.withTask(`/api/projects/${pid}/models/import`));
       const t = UI.store.get("lota-token"); if (t) xhr.setRequestHeader("Authorization", "Bearer " + t);
       xhr.upload.onprogress = (e) => { if (e.lengthComputable) prog.textContent = `上传中 ${Math.round(e.loaded / e.total * 100)}%（之后会检查任务类型和类别）`; };
       xhr.onload = () => { if (xhr.status < 300) { UI.toast("已导入 " + ver.value); render(); resolve(); } else { let m = xhr.responseText; try { m = JSON.parse(m).detail; } catch {} reject(new Error(m)); } };

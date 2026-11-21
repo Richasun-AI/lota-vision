@@ -29,7 +29,16 @@ _TRAIN_OPTIONS = {
     # 数据增强（项目设置页统一管理）
     "hsv_h", "hsv_s", "hsv_v", "degrees", "translate", "scale", "shear", "perspective",
     "flipud", "fliplr", "mosaic", "mixup", "copy_paste", "erasing",
+    # 自动调参（Ultralytics Tuner）搜出来的其余超参数
+    "momentum", "warmup_momentum", "warmup_bias_lr", "box", "cls", "cls_pw", "dfl", "bgr", "cutmix",
 }
+# 自动调参会搜索、可以存下来以后训练直接用的超参数（和 Ultralytics Tuner 默认搜索空间一致）
+TUNE_KEYS = {
+    "lr0", "lrf", "momentum", "weight_decay", "warmup_epochs", "warmup_momentum", "box", "cls", "cls_pw", "dfl",
+    "hsv_h", "hsv_s", "hsv_v", "degrees", "translate", "scale", "shear", "perspective", "flipud", "fliplr",
+    "bgr", "mosaic", "mixup", "cutmix", "copy_paste",
+}
+_TUNE_OPTIONS = {"batch", "cache", "device", "fraction", "imgsz", "optimizer", "patience", "seed", "workers", "close_mosaic", "cos_lr"}
 _EVALUATE_OPTIONS = {
     "batch", "conf", "device", "half", "imgsz", "iou", "max_det", "plots", "verbose",
     "workers",
@@ -427,6 +436,10 @@ def _stage_dataset(manifest: dict, directory: Path, staging: Path, split: str = 
     return config
 
 
+def _f1(p, r):
+    return 2 * p * r / (p + r) if p is not None and r is not None and p + r > 0 else (0.0 if p is not None and r is not None else None)
+
+
 def _metric_dict(results) -> dict:
     metrics = {}
     for key, value in getattr(results, "results_dict", {}).items():
@@ -436,6 +449,25 @@ def _metric_dict(results) -> dict:
             continue
         if math.isfinite(number):
             metrics[str(key)] = number
+    # 更多指标（Ultralytics 性能指标指南）：F1 = 精确率和召回率的调和平均；mAP75 = IoU 0.75 下的 mAP（框要更准）；
+    # 速度 = 每张图预处理 / 推理 / 后处理的毫秒数
+    for tag in ("B", "M", "P"):   # 框 / 分割轮廓 / 姿态关键点
+        f1 = _f1(metrics.get(f"metrics/precision({tag})"), metrics.get(f"metrics/recall({tag})"))
+        if f1 is not None:
+            metrics[f"metrics/F1({tag})"] = f1
+    for attr, tag in (("box", "B"), ("seg", "M"), ("pose", "P")):
+        try:
+            v = float(getattr(getattr(results, attr, None), "map75", None))
+            if math.isfinite(v):
+                metrics[f"metrics/mAP75({tag})"] = v
+        except (TypeError, ValueError):
+            pass
+    try:
+        for k, v in (getattr(results, "speed", None) or {}).items():
+            if v is not None and math.isfinite(float(v)):
+                metrics[f"speed/{k}"] = float(v)
+    except (TypeError, ValueError):
+        pass
     # 按类别的成绩（扁平键 class/<类别>/ap50 等，不影响原有读取）
     try:
         box, names = getattr(results, "box", None), getattr(results, "names", None) or {}
@@ -447,6 +479,9 @@ def _metric_dict(results) -> dict:
                                  ("precision", getattr(box, "p", None)), ("recall", getattr(box, "r", None))):
                     if arr is not None and len(arr) > i and math.isfinite(float(arr[i])):
                         metrics[f"class/{name}/{key}"] = float(arr[i])
+                f1 = _f1(metrics.get(f"class/{name}/precision"), metrics.get(f"class/{name}/recall"))
+                if f1 is not None:
+                    metrics[f"class/{name}/f1"] = f1
     except Exception:
         pass
     return metrics
@@ -503,6 +538,46 @@ def train(project_dir: Path, dataset_version: str, model_version: str, weights: 
     )
     _write_json(run / "result.json", {"model_version": version, "metrics": metrics, "sha256": metadata["sha256"]})
     return metadata
+
+
+def tune(project_dir: Path, dataset_version: str, weights: str | Path, *, iterations: int = 30, epochs: int = 30,
+         **params) -> dict:
+    """自动调参：Ultralytics Tuner（遗传算法）在一个数据集版本上试 iterations 组超参数，每组训 epochs 轮，
+    按 fitness（mAP50-95 为主的加权分）挑最好的一组。每组都是一次完整训练，很耗时"""
+    import yaml
+    manifest, directory = _dataset(project_dir, dataset_version)
+    initial = _weight_file(weights, {".pt"})
+    options = _options(params, _TUNE_OPTIONS, {"workers": 0, "seed": 42})
+    runs = _managed(project_dir, "runs")
+    run = _inside(runs, runs / "_tune" / uuid4().hex)
+    run.mkdir(parents=True, exist_ok=False)
+    with tempfile.TemporaryDirectory(prefix=".data-", dir=run) as temporary:
+        work = Path(temporary)
+        staged = work / "initial.pt"
+        _copy_verified(initial, staged)
+        data_root = work / "dataset"
+        data_root.mkdir()
+        data = _stage_dataset(manifest, directory, data_root)
+        model = _runtime_yolo(project_dir, staged, manifest["task"])
+        model.tune(data=str(data), epochs=int(epochs), iterations=int(iterations), project=str(run), name="tune",
+                   exist_ok=True, plots=False, save=False, val=True, **options)
+    best_file = next(run.rglob("best_hyperparameters.yaml"), None)
+    if best_file is None:
+        raise ValueError("自动调参没跑出结果（每一组都没训练成功）；看任务日志里的报错")
+    raw = yaml.safe_load(best_file.read_text(encoding="utf-8")) or {}
+    hyp = {k: float(v) for k, v in raw.items() if k in TUNE_KEYS and isinstance(v, (int, float))}
+    tried, best_fitness = 0, None
+    table = next(run.rglob("tune_results.csv"), None)
+    if table is not None:
+        import csv
+        rows = list(csv.DictReader(table.read_text(encoding="utf-8").splitlines()))
+        tried = len(rows)
+        scores = [float(r.get("fitness") or 0) for r in rows if (r.get("fitness") or "").strip()]
+        best_fitness = max(scores) if scores else None
+    return {"dataset_version": dataset_version, "dataset_id": manifest["dataset_id"], "task": manifest["task"],
+            "classes": manifest["classes"], "initial_weights": initial.name, "iterations": int(iterations), "epochs": int(epochs),
+            "tried": tried, "best_fitness": best_fitness, "hyp": hyp, "options": options,
+            "run": run.relative_to(Path(project_dir).resolve()).as_posix()}
 
 
 def evaluate(project_dir: Path, selector: str, dataset_version: str, *, split: str = "val", **params) -> dict:

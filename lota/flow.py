@@ -10,6 +10,7 @@ import hashlib
 import json
 import time
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field
 
@@ -2059,12 +2060,55 @@ class TrainLoop(_TrainSpec):
     flipud: float | None = Field(default=None, ge=0, le=1)
     mosaic: float | None = Field(default=None, ge=0, le=1)
     mixup: float | None = Field(default=None, ge=0, le=1)
+    cos_lr: bool | None = None                                    # 余弦学习率（不填 = 自动：接着训时开）
+    warmup_epochs: float | None = Field(default=None, ge=0, le=20)
+    use_tuned: bool = True                                        # 有自动调参结果就用
 
 
 _orig_train = TOOLS["model.train"]
 
+TUNED_FILE = "tuned_hyp.json"   # 自动调参结果：存在当前标注任务（或子项目）目录
+FINETUNE = {"optimizer": "AdamW", "lr0": 0.0005, "warmup_epochs": 1.0, "cos_lr": True}   # 接着已训好的模型训
 
-def _train_loop(c, dataset_version, model_version, weights, continue_from=None, **kw):
+
+def load_tuned(directory):
+    f = Path(directory) / TUNED_FILE
+    try:
+        return json.loads(f.read_text(encoding="utf-8")) if f.is_file() else None
+    except (ValueError, OSError):
+        return None
+
+
+def auto_train_options(directory, kw, continuing, use_tuned=True):
+    """训练参数自动选：手动填了的一律不动；接着训用小学习率微调；从底座训用自动调参结果（有的话）。
+    注意 Ultralytics 的 optimizer=auto 会忽略 lr0，所以要自己控制学习率就得同时定下优化器。返回 (参数, 说明)"""
+    out, notes = dict(kw), []
+    user = {k for k, v in kw.items() if v is not None}
+    tuned = load_tuned(directory) if use_tuned else None
+    if tuned and tuned.get("hyp"):
+        lr_keys = {"lr0", "lrf", "momentum", "warmup_epochs", "warmup_momentum"}   # 调参的学习率是按“从底座训”搜的
+        used = {k: v for k, v in tuned["hyp"].items() if k not in user and not (continuing and k in lr_keys)}
+        out.update(used)
+        if not continuing and "optimizer" not in user and tuned.get("optimizer"):
+            out["optimizer"] = tuned["optimizer"]
+        if used:
+            notes.append(f"用了自动调参（{tuned.get('at', '')}，数据集 {tuned.get('dataset_version', '')}）的 {len(used)} 个参数")
+    if continuing:
+        auto = {k: v for k, v in FINETUNE.items() if k not in user}
+        if "lr0" in user and "optimizer" not in user:
+            auto["optimizer"] = "AdamW" if kw["lr0"] < 0.005 else "SGD"
+        out.update(auto)
+        if auto:
+            notes.append("接着已训好的模型训：" + "、".join(f"{k}={v}" for k, v in auto.items()) + "（小学习率微调，不冲掉已学到的）")
+    elif "lr0" in user and kw.get("optimizer") in (None, "auto"):
+        out["optimizer"] = "AdamW" if kw["lr0"] < 0.005 else "SGD"   # optimizer=auto 会忽略 lr0
+        notes.append(f"填了学习率 {kw['lr0']}，优化器定为 {out['optimizer']}（自动模式会忽略学习率）")
+    elif not tuned:
+        notes.append("从底座训：优化器和学习率由 Ultralytics 自动选")
+    return out, notes
+
+
+def _train_loop(c, dataset_version, model_version, weights, continue_from=None, use_tuned=True, **kw):
     if kw.get("batch") == 0:
         raise ValueError("批大小不能是 0；填正数，或 -1 表示自动")
     model_version = _next_name(Path(c.directory) / "models", model_version.replace("{dataset}", dataset_version))
@@ -2075,14 +2119,50 @@ def _train_loop(c, dataset_version, model_version, weights, continue_from=None, 
         except (FileNotFoundError, ValueError, KeyError, OSError):
             path = None   # 第一轮还没有上一轮模型
         if path is not None:
-            out = train(c.directory, dataset_version, model_version, path, **kw)
+            opts, notes = auto_train_options(c.directory, kw, True, use_tuned)
+            out = train(c.directory, dataset_version, model_version, path, **opts)
             out["continued_from"] = continue_from
-            _write_card(c, out, continued_from=continue_from, base=Path(str(path)).parent.name)
+            out["strategy"] = notes
+            _write_card(c, out, continued_from=continue_from, base=Path(str(path)).parent.name, strategy=notes)
             return out
-    out = _orig_train.function(c, dataset_version, model_version, weights, **kw)
+    opts, notes = auto_train_options(c.directory, kw, False, use_tuned)
+    out = _orig_train.function(c, dataset_version, model_version, weights, **opts)
     out["continued_from"] = None
-    _write_card(c, out, continued_from=None, base=Path(weights).name)
+    out["strategy"] = notes
+    _write_card(c, out, continued_from=None, base=Path(weights).name, strategy=notes)
     return out
+
+
+# ── 自动调参：在一个数据集版本上试多组超参数，挑最好的存下来，以后训练默认用 ──
+class TuneSpec(Spec):
+    dataset_version: str
+    weights: str = ""                                           # 空 = 标准底座（yolo26s）
+    iterations: int = Field(default=30, ge=3, le=300)           # 试多少组
+    epochs: int = Field(default=30, ge=3, le=300)               # 每组训多少轮
+    imgsz: int = Field(default=640, ge=32, le=4096)
+    batch: int = Field(default=8, ge=1, le=512)
+    device: str = "0"
+    workers: int = Field(default=2, ge=0, le=32)
+    optimizer: Literal["AdamW", "SGD"] = "AdamW"
+
+
+def tune_hyp(c, dataset_version, weights="", iterations=30, epochs=30, **kw):
+    """自动调参：结果存到当前标注任务（或子项目）的 tuned_hyp.json，以后“从底座训”默认用这组参数"""
+    from .hub import base_weights
+    from .models import tune
+    if weights:
+        w = c.engine.allowed_weights(weights)
+    else:
+        w = base_weights(c.engine, "yolo26", "s", c.scenario.task) or base_weights(c.engine, "yolov8", "s", c.scenario.task)
+        if not w:
+            raise ValueError("没有找到标准底座权重（yolo26s / yolov8s），请在参数里选一个权重文件")
+    out = tune(c.directory, dataset_version, w, iterations=iterations, epochs=epochs, **kw)
+    record = {**out, "optimizer": kw.get("optimizer", "AdamW"), "at": time.strftime("%Y-%m-%d %H:%M:%S")}
+    (Path(c.directory) / TUNED_FILE).write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+    return record
+
+
+TOOLS["model.tune"] = Tool("自动调参（试多组超参数，挑最好的）", TuneSpec, tune_hyp)
 
 
 def _write_card(c, out, **kv):
