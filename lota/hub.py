@@ -400,6 +400,15 @@ def guideline_html(text):
     return "<div style='font-size:14px;line-height:1.6'>" + escape(text).replace("\n", "<br>") + "</div>"
 
 
+def guideline_text(directory):
+    """当前范围的标注规范：标注任务目录里有就用它的，没有用子项目的"""
+    from .tasks import source_project
+    for f in (Path(directory) / "guideline.md", source_project(Path(directory)) / "guideline.md"):
+        if f.is_file():
+            return f.read_text(encoding="utf-8")
+    return ""
+
+
 def sync_guideline(cfg, text):
     from .labels import LabelStudioClient
     LabelStudioClient.from_config(cfg)._request("PATCH", f"/api/projects/{cfg['project_id']}", payload={
@@ -486,16 +495,16 @@ def register_overview(router, engine, directory):
     from fastapi import Body, HTTPException
 
     @router.get("/projects/{project_id}/hub/guideline", tags=["hub"])
-    def get_guideline(project_id: str):
-        f = directory(project_id) / "guideline.md"
-        return {"text": f.read_text(encoding="utf-8") if f.is_file() else ""}
+    def get_guideline(project_id: str, annotation_task: str = ""):
+        return {"text": guideline_text(task_dir(engine, directory, project_id, annotation_task))}
 
     @router.put("/projects/{project_id}/hub/guideline", tags=["hub"])
-    def put_guideline(project_id: str, payload: dict = Body(...)):
-        """保存标注规范；子项目连着 Label Studio 的话，同步成 Label Studio 项目的标注说明（打开任务前弹出）"""
+    def put_guideline(project_id: str, payload: dict = Body(...), annotation_task: str = ""):
+        """保存标注规范（按标注任务存）；连着 Label Studio 的话，同步成那个 Label Studio 项目的标注说明（打开任务前弹出）"""
         text = str(payload.get("text") or "")[:20000]
-        (directory(project_id) / "guideline.md").write_text(text, encoding="utf-8")
-        cfg = engine.store.project(project_id)["config"].get("label_studio")
+        (task_dir(engine, directory, project_id, annotation_task) / "guideline.md").write_text(text, encoding="utf-8")
+        full = engine.store.project(project_id)["config"]
+        cfg = ((full.get("annotation_tasks") or {}).get(annotation_task) or {}).get("label_studio") if annotation_task             else full.get("label_studio")
         if not cfg or not cfg.get("project_id"):
             return {"saved": True, "label_studio": "还没连接 Label Studio，连接后再保存一次就会同步"}
         try:
@@ -912,6 +921,12 @@ def register_system(router, engine, directory):
     @router.get("/system", tags=["hub"])
     def system():
         return system_status(engine)
+
+    @router.get("/system/live", tags=["hub"])
+    def system_live(since: float = 0.0):
+        """GPU / CPU / 内存 / 功率的实时曲线数据（训练时的小窗口轮询）"""
+        from .sysmon import history
+        return history(since)
 
 
 # ── 数据集统计图表（参考 Ultralytics Platform 数据集的“图表”页）───────────────────────

@@ -668,6 +668,55 @@ def tune(project_dir: Path, dataset_version: str, weights: str | Path, *, iterat
             "run": run.relative_to(Path(project_dir).resolve()).as_posix()}
 
 
+PRESENCE_CONF = (0.25, 0.5)
+
+
+def presence_metrics(classes, truth, scores, fixed=PRESENCE_CONF):
+    """按整张图判断“有没有”：truth = 每张图人工标了哪些类别（集合），scores = 每张图每个类别模型的最高置信度。
+    每个类别：认出率（有的图认出来几成）、准确率（说有的图真有几成）、误报率（没有的图被说成有几成），
+    在常用置信度门槛下各算一遍，再找 F1 最高的门槛（部署时用这个门槛最合适）"""
+    out = {}
+    for name in classes:
+        pos = [i for i, t in enumerate(truth) if name in t]
+        neg = [i for i, t in enumerate(truth) if name not in t]
+        if not pos:
+            continue
+
+        def at(conf):
+            hit = {i for i, sc in enumerate(scores) if sc.get(name, 0.0) >= conf}
+            tp = len(hit & set(pos)); fp = len(hit & set(neg)); fn = len(pos) - tp
+            p = tp / (tp + fp) if tp + fp else 0.0
+            r = tp / len(pos)
+            return {"conf": conf, "recall": round(r, 4), "precision": round(p, 4),
+                    "false_alarm": round(fp / len(neg), 4) if neg else 0.0,
+                    "f1": round(2 * p * r / (p + r), 4) if p + r else 0.0, "missed": fn, "false": fp}
+        grid = [round(0.05 * k, 2) for k in range(1, 19)]
+        best = max((at(c) for c in grid), key=lambda x: (x["f1"], x["conf"]))
+        out[name] = {"images_with": len(pos), "images_without": len(neg),
+                     "at": {str(c): at(c) for c in fixed}, "best": best}
+    return out
+
+
+def _presence_eval(project_dir, selector, manifest, directory, split, device):
+    """评估时顺便按整张图判断“有没有”（巡检只关心站点有没有某类问题时，比 mAP 更贴近实际）"""
+    images = [i for i in manifest.get("images") or [] if i.get("split") == split]
+    paths = [directory / i["path"] for i in images]
+    keep = [k for k, p in enumerate(paths) if p.is_file()]
+    if not keep:
+        return {}
+    scores = []
+    for k in range(0, len(keep), 64):
+        batch = [paths[j] for j in keep[k:k + 64]]
+        r = predict(project_dir, selector, batch, conf=0.05, **({"device": device} if device else {}))
+        for pred in r["predictions"]:
+            best = {}
+            for d in pred.get("detections") or []:
+                best[d["label"]] = max(best.get(d["label"], 0.0), float(d["confidence"]))
+            scores.append(best)
+    truth = [{lab[0] for lab in images[j].get("labels") or [] if lab} for j in keep]
+    return presence_metrics(manifest["classes"], truth, scores)
+
+
 def evaluate(project_dir: Path, selector: str, dataset_version: str, *, split: str = "val", **params) -> dict:
     """Evaluate a registered model against a frozen validation or test split."""
     if split not in {"val", "test"}:
@@ -700,6 +749,15 @@ def evaluate(project_dir: Path, selector: str, dataset_version: str, *, split: s
         "split": split, "metrics": _metric_dict(results),
         "report": str(output / "evaluation.json"),
     }
+    if metadata["task"] in ("detect", "segment", "obb"):
+        try:
+            presence = _presence_eval(project_dir, selector, manifest, directory, split, str(params.get("device") or ""))
+        except Exception as e:   # 这部分算不出来不影响主评估
+            presence, report["presence_error"] = {}, str(e)[:300]
+        report["presence"] = presence
+        for name, v in presence.items():
+            for key in ("recall", "precision", "false_alarm", "f1", "conf"):
+                report["metrics"][f"image/{name}/{key}"] = v["best"][key]
     _write_json(output / "evaluation.json", report)
     return report
 

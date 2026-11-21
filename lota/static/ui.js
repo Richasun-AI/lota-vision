@@ -238,6 +238,83 @@ const UI = (() => {
     await api(`/api/projects/${pid}/jobs/${id}/control`, { method: "POST", body: { command: "stop" } });
     toast("已请求提前结束：当前这一组跑完就收尾，结果照常保存");
   }
+  // 机器资源小窗口（训练时）：GPU 占用、显存、CPU、内存、显卡温度 / 功率的最近 10 分钟曲线，每 2 秒刷新
+  let monitor = null;
+  function sysMonitor(open = true) {
+    if (!open) { if (monitor) monitor.close(); return; }
+    if (monitor) { monitor.box.style.display = ""; return; }
+    const NS = "http://www.w3.org/2000/svg", rows = [];
+    const series = [
+      ["gpu", "GPU 占用", "%", "#2563eb", (s) => s.gpu?.[0]?.util, 100],
+      ["vram", "显存", "%", "#7c3aed", (s) => { const g = s.gpu?.[0]; return g && g.mem_total ? 100 * g.mem_used / g.mem_total : null; }, 100],
+      ["cpu", "CPU 占用", "%", "#059669", (s) => s.cpu, 100],
+      ["mem", "内存", "%", "#d97706", (s) => s.mem?.percent, 100],
+      ["temp", "显卡温度", "°C", "#dc2626", (s) => s.gpu?.[0]?.temp, 100],
+      ["power", "显卡功率", "W", "#0891b2", (s) => s.gpu?.[0]?.power, null],
+    ];
+    let samples = [], since = 0, timer = null, mini = false;
+    const chart = (vals, color, max) => {
+      const W = 200, H = 34, svg = document.createElementNS(NS, "svg");
+      svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("width", W); svg.setAttribute("height", H);
+      const pts = vals.map((v, i) => v == null ? null : [i * W / Math.max(vals.length - 1, 1), H - 2 - (H - 4) * Math.min(v / max, 1)]);
+      const line = document.createElementNS(NS, "polyline");
+      line.setAttribute("points", pts.filter(Boolean).map((p) => p.map((x) => x.toFixed(1)).join(",")).join(" "));
+      line.setAttribute("fill", "none"); line.setAttribute("stroke", color); line.setAttribute("stroke-width", "1.5");
+      const base = document.createElementNS(NS, "rect");
+      base.setAttribute("width", W); base.setAttribute("height", H); base.setAttribute("fill", "rgba(127,127,127,.08)"); base.setAttribute("rx", 3);
+      svg.append(base, line);
+      return svg;
+    };
+    const body = h("div", { style: { padding: "6px 10px 8px" } });
+    const head = h("div", { style: { display: "flex", alignItems: "center", gap: "6px", padding: "6px 10px", borderBottom: "1px solid rgba(127,127,127,.2)", cursor: "default" } });
+    const title = h("b", { style: { flex: 1, fontSize: "13px" } }, "📈 机器资源");
+    const minBtn = h("button", { class: "btn sm ghost", title: "收起 / 展开", onclick: () => { mini = !mini; body.style.display = mini ? "none" : ""; minBtn.textContent = mini ? "▢" : "–"; } }, "–");
+    const closeBtn = h("button", { class: "btn sm ghost", title: "关闭（模型中心的“📈 机器资源”按钮可以再打开）", onclick: () => close() }, "×");
+    head.append(title, minBtn, closeBtn);
+    const box = h("div", { style: { position: "fixed", right: "16px", bottom: "16px", width: "300px", maxWidth: "calc(100vw - 32px)", zIndex: 900,
+      background: "var(--card, #fff)", color: "inherit", border: "1px solid rgba(127,127,127,.3)", borderRadius: "10px", boxShadow: "0 6px 24px rgba(0,0,0,.18)", fontSize: "12px" } }, head, body);
+    document.body.append(box);
+    const draw = () => {
+      const last = samples[samples.length - 1];
+      const g = last?.gpu?.[0];
+      const kids = [];
+      for (const [key, label, unit, color, get, fixedMax] of series) {
+        const vals = samples.map(get);
+        if (key === "power" && !vals.some((v) => v != null)) {   // 这块显卡不报告功率
+          if (g) kids.push(h("div", { class: "muted", style: { margin: "4px 0" } }, `显卡功率：读不到（这块显卡不报告功率）${g.power_limit ? `，功率上限 ${g.power_limit} W` : ""}`));
+          continue;
+        }
+        if (!vals.some((v) => v != null)) continue;
+        const max = fixedMax || Math.max(g?.power_limit || 0, ...vals.filter((v) => v != null)) || 1;
+        const cur = vals[vals.length - 1];
+        const extra = key === "vram" && g ? ` · ${(g.mem_used / 1024).toFixed(1)}/${(g.mem_total / 1024).toFixed(1)} GB`
+          : key === "mem" && last?.mem ? ` · ${(last.mem.used / 2 ** 30).toFixed(1)}/${(last.mem.total / 2 ** 30).toFixed(1)} GB`
+          : key === "power" && g?.power_limit ? ` / ${g.power_limit} W` : "";
+        kids.push(h("div", { style: { margin: "4px 0" } },
+          h("div", { style: { display: "flex", justifyContent: "space-between" } }, h("span", {}, label),
+            h("b", { style: { color } }, cur == null ? "—" : `${Math.round(cur)}${unit}`, h("span", { class: "muted", style: { fontWeight: "normal" } }, extra))),
+          chart(vals, color, max)));
+      }
+      kids.push(h("div", { class: "muted", style: { marginTop: "2px" } }, (g ? g.name + " · " : "") + `最近 ${Math.round(samples.length * 2 / 60) || "<1"} 分钟，每 2 秒刷新`));
+      body.replaceChildren(...(samples.length ? kids : [h("div", { class: "muted" }, "正在读取…")]));
+    };
+    const poll = async () => {
+      try {
+        const d = await api(`/api/system/live?since=${since}`);
+        if (d.samples.length) { samples = samples.concat(d.samples).slice(-300); since = samples[samples.length - 1].t; }
+        draw();
+      } catch (e) { body.replaceChildren(h("div", { class: "muted" }, "读不到机器状态：" + e.message)); }
+      timer = setTimeout(poll, 2000);
+    };
+    const close = () => { clearTimeout(timer); box.remove(); monitor = null; try { sessionStorage.setItem("lota.sysmon.closed", "1"); } catch {} };
+    monitor = { box, close };
+    draw(); poll();
+  }
+  function sysMonitorAuto(running) {   // 有训练 / 调参在跑就自动弹出（本次会话里手动关掉过就不再自动弹）
+    let closed = false;
+    try { closed = sessionStorage.getItem("lota.sysmon.closed") === "1"; } catch {}
+    if (running && !closed && !monitor) sysMonitor(true);
+  }
   // 页面顶部的“当前标注任务”选择（数据集、模型中心用）；改了就记住并回调刷新
   function taskPicker(pid, onChange) {
     const cfg = projects.find((p) => p.id === pid)?.config || {}, tasks = Object.entries(cfg.annotation_tasks || {});
@@ -250,5 +327,5 @@ const UI = (() => {
     return h("label", { class: "row", style: { gap: "6px", alignItems: "center" } }, h("span", { class: "small muted" }, "当前标注任务"), sel);
   }
   return { api, blobUrl, rawFetch, h, nav, project, projectInfo, onProject, toast, modal, runTool, lineChart, drawBoxes, pct, when, bytes, store, pitfall,
-           task, setTask, taskInfo, withTask, taskPicker, jobProgress, stopJob, dur };
+           task, setTask, taskInfo, withTask, taskPicker, jobProgress, stopJob, dur, sysMonitor, sysMonitorAuto };
 })();

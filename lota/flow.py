@@ -403,11 +403,11 @@ def ls_setup(c, base_url="http://127.0.0.1:8081", title=None, token_env="LABEL_S
         "title": title or f"LOTA · {c.scenario.name}" + (f" · {c.scenario.annotation_tasks[task_id].name}" if task_id else ""),
         "label_config": _pose_cfg(c) or label_config(list(c.scenario.classes), c.scenario.task)})
     pid = created["id"]
-    guide = root / "guideline.md"
-    if guide.is_file() and guide.read_text(encoding="utf-8").strip():   # 子项目写过标注规范：同步成新项目的标注说明
+    from .hub import guideline_text, sync_guideline
+    text = guideline_text(c.directory)   # 标注任务（没有就用子项目）写过标注规范：同步成新项目的标注说明
+    if text.strip():
         try:
-            from .hub import sync_guideline
-            sync_guideline({**cfg, "project_id": pid}, guide.read_text(encoding="utf-8"))
+            sync_guideline({**cfg, "project_id": pid}, text)
         except Exception:
             pass
     raw = (root / "raw").resolve()   # 原图在子项目目录，标注任务共用

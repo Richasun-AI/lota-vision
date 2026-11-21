@@ -93,6 +93,7 @@ async function render() {
     h("div", { class: "page-head" },
       h("div", {}, h("h1", {}, "模型中心"), h("p", {}, `「${info?.config?.name || pid}」的所有模型版本：成绩、正在使用哪个、导出到手机。分数越高越好；“正式使用”的模型会被预标注、找图和推理默认使用。`)),
       h("div", { class: "row" }, UI.taskPicker(pid, render) || "", h("a", { class: "btn", href: "/datasets" }, "看数据集"), h("button", { class: "btn", onclick: compareDlg }, "A/B 对比"), h("button", { class: "btn", onclick: tuneDlg, title: "试多组超参数，挑最好的，以后训练默认用" }, "自动调参"), h("button", { class: "btn", onclick: importDlg }, "导入外部模型"),
+        h("button", { class: "btn", onclick: () => UI.sysMonitor(true), title: "GPU / CPU / 内存 / 显卡温度和功率的实时曲线；训练、调参时自动弹出" }, "📈 机器资源"),
         h("button", { class: "btn primary lg", onclick: () => trainWizard() }, "＋ 训练新模型"))),
     h("div", { class: "grid k4" },
       kpi("正式使用中", prod ? prod.version : "还没有", prod ? `综合得分 ${UI.pct(SCORE(prod.metrics))}` : "训练后点“设为正式使用”"),
@@ -410,7 +411,7 @@ async function startTraining(pid, o) {
       dataset_version: ds, model_version: o.name || st.naming.model.replace("{size}", o.size), weights: o.base,
       epochs: o.adv.epochs || st.presets[o.preset], imgsz: o.adv.imgsz || tr.imgsz, batch: o.adv.batch || tr.batch,
       device: tr.device, workers: tr.workers, patience: o.adv.patience ?? tr.patience, ...(o.adv.lr0 ? { lr0: o.adv.lr0 } : {}),
-      ...(o.from === "latest" ? { continue_from: "latest" } : {}), ...st.augment, use_tuned: o.adv.use_tuned !== false };
+      ...(o.from === "latest" ? { continue_from: "latest" } : {}), ...augmentFor(st.augment, o.adv.use_tuned !== false), use_tuned: o.adv.use_tuned !== false };
     panel.step(`开始训练（${args.epochs} 轮，模型 ${o.size}）…训练期间可以关掉这个窗口`);
     const t0 = Date.now(); let last = 0;
     const out = await UI.runTool(pid, "model.train", args, { onProgress: async () => {
@@ -484,7 +485,30 @@ function progressPanel(title) {
     close };
 }
 
+// 项目设置里的数据增强只是默认值：用自动调参结果时，调参搜过的那几项让调参结果说了算（否则后端当成“手动填的”，把调参值盖掉）
+function augmentFor(augment, useTuned) {
+  const hyp = useTuned && S.tuned ? S.tuned.hyp || {} : {};
+  return Object.fromEntries(Object.entries(augment || {}).filter(([k]) => !(k in hyp)));
+}
+
 // ── 评估 ──────────────────────────────────────────────────────────────────
+// 按整张图判断“有没有”（巡检只关心站点有没有杂草 / 某类问题时看这个，比 mAP 更贴近实际）
+function presenceTable(presence) {
+  const rows = Object.entries(presence || {});
+  if (!rows.length) return null;
+  const pc = (v) => (v * 100).toFixed(0) + "%";
+  return h("div", { style: { marginTop: "10px" } },
+    h("b", {}, "按整张图判断“有没有”"),
+    h("p", { class: "small muted" }, "只关心“这张图有没有、要不要处理”时看这张表：认出率 = 真有的图里认出来几成；误报率 = 真没有的图里被说成有几成。框切得一不一样不影响这里的分数。"),
+    h("table", { class: "table" },
+      h("tr", {}, h("th", {}, "类别"), h("th", { class: "num" }, "有 / 没有的图"), h("th", {}, "置信度门槛"), h("th", { class: "num" }, "认出率"), h("th", { class: "num" }, "误报率"), h("th", { class: "num" }, "说有的里真有"), h("th", { class: "num" }, "漏掉 / 误报 张数")),
+      ...rows.flatMap(([name, v]) => [...Object.values(v.at), { ...v.best, best: true }].map((x, i) => h("tr", {},
+        h("td", {}, i ? "" : h("b", {}, name)), h("td", { class: "num small" }, i ? "" : `${v.images_with} / ${v.images_without}`),
+        h("td", { class: "small" }, x.best ? h("b", {}, `${x.conf}（推荐：最均衡）`) : String(x.conf)),
+        h("td", { class: "num" }, pc(x.recall)), h("td", { class: "num" }, pc(x.false_alarm)), h("td", { class: "num" }, pc(x.precision)),
+        h("td", { class: "num small" }, `${x.missed} / ${x.false}`))))));
+}
+
 async function evaluate(pid, m) {
   const { datasets } = await UI.api(`/api/projects/${pid}/hub/datasets`);
   if (!datasets.length) return UI.toast("还没有数据集", true);
@@ -502,6 +526,9 @@ async function evaluate(pid, m) {
     UI.toast("评估中…");
     const out = await UI.runTool(pid, "model.evaluate", { selector: m.version, dataset_version: dsSel.value, split: sp, device: S.settings.train.device });
     UI.toast(`评估完成：综合得分 ${UI.pct(SCORE(out.metrics))}`); render();
+    const pt = presenceTable(out.presence);
+    if (pt) UI.modal(`评估结果 · ${m.version} · ${dsSel.value} ${sp === "test" ? "测试集" : "验证集"}`, h("div", {},
+      h("p", {}, `综合得分 mAP50 ${UI.pct(out.metrics["metrics/mAP50(B)"] ?? out.metrics["metrics/mAP50(M)"])}，严格得分 mAP50-95 ${UI.pct(out.metrics["metrics/mAP50-95(B)"] ?? out.metrics["metrics/mAP50-95(M)"])}`), pt), [], { wide: true });
   } }]);
 }
 
@@ -835,6 +862,7 @@ async function loadJobs() {
       h("td", { class: "small muted nowrap" }, UI.when(j.updated || j.created)), h("td", { class: "small" }, j.error ? h("span", { style: { color: "var(--danger)" } }, j.error.slice(0, 160)) : "",
         UI.jobProgress(j, { onStop: async () => { await UI.stopJob(pid, j.id); loadJobs(); } })))))
     : h("div", { class: "empty" }, "还没有任务"));
+  UI.sysMonitorAuto(jobs.some((j) => j.status === "running" && /^(model\.(train|tune)|workflow:)/.test(j.kind)));   // 训练时弹出机器资源小窗口
   if (jobs.some((j) => ["queued", "running"].includes(j.status))) jobsTimer = setTimeout(() => { loadJobs(); }, 5000);
 }
 
@@ -864,11 +892,14 @@ async function compareDlg() {
       if (sp.value === "test" && !(d.counts?.test > 0)) throw new Error("这个数据集没有测试集，改选验证集");
       out.replaceChildren(h("div", { class: "muted small" }, "考试中…（两个模型依次评估）"));
       const res = {};
-      for (const v of [a.value, b.value]) res[v] = (await UI.runTool(pid, "model.evaluate", { selector: v, dataset_version: ds.value, split: sp.value, device: S.settings.train.device })).metrics || {};
+      const pres = {};
+      for (const v of [a.value, b.value]) { const o = await UI.runTool(pid, "model.evaluate", { selector: v, dataset_version: ds.value, split: sp.value, device: S.settings.train.device }); res[v] = o.metrics || {}; pres[v] = o.presence; }
       const cls = (ms.models.find((m) => m.version === a.value) || {}).task === "classify";
       const rows = cls ? [["准确率 Top-1", "metrics/accuracy_top1"], ["前五名命中 Top-5", "metrics/accuracy_top5"]]
         : [["综合得分 mAP50", "metrics/mAP50(B)"], ["严格得分 mAP50-95", "metrics/mAP50-95(B)"], ["框得准（精确率）", "metrics/precision(B)"], ["找得全（召回率）", "metrics/recall(B)"]];
       const main = rows[0][1], diff = (res[b.value][main] ?? 0) - (res[a.value][main] ?? 0);
+      for (const name of Object.keys(pres[a.value] || {}))   // 按整张图判断“有没有”（各自用最均衡的门槛）
+        rows.push([`有没有 ${name}：认出率`, `image/${name}/recall`], [`有没有 ${name}：误报率（越低越好）`, `image/${name}/false_alarm`]);
       out.replaceChildren(h("table", { class: "table" },
         h("tr", {}, h("th", {}, "指标"), h("th", { class: "num" }, "A · " + a.value), h("th", { class: "num" }, "B · " + b.value), h("th", { class: "num" }, "B − A")),
         ...rows.map(([t, k]) => { const va = res[a.value][k], vb = res[b.value][k], dd = vb != null && va != null ? vb - va : null;

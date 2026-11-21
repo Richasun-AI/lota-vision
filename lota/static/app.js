@@ -1261,12 +1261,13 @@ async function labelsPage(){
       h("div",{class:"actions"},button("立即回收标注",pullNow,"primary"),
         ls.auto_pull?button("关闭自动回收",autoPull(false)):button("开启自动回收",autoPull(true))));
   }
-  const guide=await request(pathFor(project)+"/hub/guideline").catch(()=>({text:""}));
+  const guideUrl=pathFor(project)+"/hub/guideline"+(state.annotationTask?"?annotation_task="+encodeURIComponent(state.annotationTask):"");   // 按当前标注任务存、同步到任务自己的 Label Studio 项目
+  const guide=await request(guideUrl).catch(()=>({text:""}));
   const guideText=h("textarea",{rows:6,style:"width:100%",placeholder:"例如：\n1. 杂草：一片连在一起的框成一个框，不要逐棵框；\n2. 接地排：只框铜排本体，不框连接线；\n3. 远处看不清（小于 20 像素）的不框；\n4. 图里一个目标都没有选 No target。"},guide.text||"");
-  const guidePanel=panel(h("strong",{},"标注规范"),
+  const guidePanel=panel(h("strong",{},"标注规范"+(state.annotationTask?`（标注任务「${state.annotationTask}」）`:"")),
     h("p",{class:"small muted"},"写清楚每个类别框到什么程度。保存后会同步成 Label Studio 的标注说明，标注员打开任务前先看到。规范不统一是分数卡住上不去的头号原因。"),
     guideText,h("div",{class:"actions"},button("保存并同步到 Label Studio",asyncClick(async()=>{
-      const r=await request(pathFor(project)+"/hub/guideline","PUT",{text:guideText.value});notifyUser("标注规范已保存；"+r.label_studio);}),"primary")));
+      const r=await request(guideUrl,"PUT",{text:guideText.value});notifyUser("标注规范已保存；"+r.label_studio);}),"primary")));
   return h("div",{},page("标注系统","从已抽取图片提交任务，保留人工复核结果。"),
     annotationTaskPicker(),classesPanel,status,cfgPanel,reviewPanel,guidePanel,panel(button("提交所选图片",()=>toolDialog("labels.push")),button("回收标注（选参数）",()=>toolDialog("labels.pull")),
     button("导入标注 JSON",()=>toolDialog("labels.import"))),
