@@ -205,6 +205,39 @@ const UI = (() => {
   function pitfall(items, title = "⚠️ 避坑") {
     return h("div", { class: "callout warn pitfall" }, h("b", {}, title), h("ul", {}, ...items.map((t) => h("li", {}, t))));
   }
+  // 长任务的进度：进度条 + 说明 + 已用时间 + 预计还要多久（任务表里的 progress，由工具上报）
+  function dur(sec) {
+    sec = Math.max(0, Math.round(sec));
+    const hh = Math.floor(sec / 3600), mm = Math.floor((sec % 3600) / 60);
+    return hh ? `${hh} 小时 ${mm} 分` : mm ? `${mm} 分` : `${sec} 秒`;
+  }
+  function jobProgress(job, { onStop } = {}) {
+    const p = job && job.progress;
+    if (!job || job.status !== "running") return null;
+    const now = Date.now() / 1000, started = p?.started || job.updated || job.created;
+    const parts = [`已运行 ${dur(now - started)}`];
+    let bar = null;
+    if (p && p.total) {
+      const frac = Math.min(1, Math.max(0, (p.done || 0) / p.total));
+      bar = h("div", { style: { height: "8px", background: "var(--line, #e5e7eb)", borderRadius: "4px", overflow: "hidden", margin: "4px 0", minWidth: "160px" } },
+        h("div", { style: { width: (frac * 100).toFixed(1) + "%", height: "100%", background: "var(--brand, #2563eb)" } }));
+      parts.unshift(`${Math.round(frac * 100)}%`);
+      const spent = (p.at || now) - p.started;
+      if (frac > 0.01 && frac < 1 && spent > 30) {
+        const left = spent / frac - spent - (now - (p.at || now));
+        parts.push(left > 0 ? `预计还要 ${dur(left)}（约 ${new Date((now + left) * 1000).toTimeString().slice(0, 5)} 完成）` : "快完成了");
+      }
+    }
+    if (p && p.steps > 1) parts.push(`第 ${p.step_index}/${p.steps} 步`);
+    if (p && p.at && now - p.at > 1800) parts.push(`⚠ ${dur(now - p.at)}没有新进度`);
+    const stopBtn = p && p.stoppable && onStop ? h("button", { class: "btn sm", title: "当前这一组跑完就收尾，用已经试过的里面最好的一组",
+      disabled: !!job.stop_requested, onclick: onStop }, job.stop_requested ? "已请求提前结束…" : "提前结束（用目前最好的）") : null;
+    return h("div", { class: "small" }, bar, p?.message ? h("div", {}, p.message) : null, h("div", { class: "muted" }, parts.join(" · ")), stopBtn);
+  }
+  async function stopJob(pid, id) {
+    await api(`/api/projects/${pid}/jobs/${id}/control`, { method: "POST", body: { command: "stop" } });
+    toast("已请求提前结束：当前这一组跑完就收尾，结果照常保存");
+  }
   // 页面顶部的“当前标注任务”选择（数据集、模型中心用）；改了就记住并回调刷新
   function taskPicker(pid, onChange) {
     const cfg = projects.find((p) => p.id === pid)?.config || {}, tasks = Object.entries(cfg.annotation_tasks || {});
@@ -217,5 +250,5 @@ const UI = (() => {
     return h("label", { class: "row", style: { gap: "6px", alignItems: "center" } }, h("span", { class: "small muted" }, "当前标注任务"), sel);
   }
   return { api, blobUrl, rawFetch, h, nav, project, projectInfo, onProject, toast, modal, runTool, lineChart, drawBoxes, pct, when, bytes, store, pitfall,
-           task, setTask, taskInfo, withTask, taskPicker };
+           task, setTask, taskInfo, withTask, taskPicker, jobProgress, stopJob, dur };
 })();

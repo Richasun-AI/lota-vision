@@ -29,7 +29,7 @@ class Activate(Spec):
 
 
 class Control(Spec):
-    command: Literal["pause", "resume", "cancel"]
+    command: Literal["pause", "resume", "cancel", "stop"]
 
 
 class WorkflowRun(Spec):

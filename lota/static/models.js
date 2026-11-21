@@ -818,7 +818,7 @@ function exportDlg(pid, m) {
 }
 
 // ── 最近的任务 ────────────────────────────────────────────────────────────
-const KIND = { "model.train": "训练", "model.evaluate": "评估", "model.export": "导出", "model.alias": "切换别名", "dataset.publish": "打包数据集", "model.predict": "批量推理" };
+const KIND = { "model.tune": "自动调参", "model.train": "训练", "model.evaluate": "评估", "model.export": "导出", "model.alias": "切换别名", "dataset.publish": "打包数据集", "model.predict": "批量推理" };
 let TITLES = null;
 async function loadJobs() {
   clearTimeout(jobsTimer);
@@ -829,10 +829,11 @@ async function loadJobs() {
   jobs = (Array.isArray(jobs) ? jobs : jobs.jobs || []).slice(0, 8);
   const st = { queued: ["排队", "badge"], running: ["运行中", "badge info"], succeeded: ["完成", "badge ok"], failed: ["失败", "badge danger"], interrupted: ["中断", "badge warn"], cancelled: ["取消", "badge"], paused: ["暂停", "badge"] };
   box.replaceChildren(jobs.length ? h("table", { class: "table" },
-    h("tr", {}, h("th", {}, "任务"), h("th", {}, "状态"), h("th", {}, "时间"), h("th", {}, "说明")),
+    h("tr", {}, h("th", {}, "任务"), h("th", {}, "状态"), h("th", {}, "时间"), h("th", {}, "进度 / 说明")),
     ...jobs.map((j) => h("tr", {}, h("td", {}, KIND[j.kind] || TITLES[j.kind] || (j.kind.startsWith("workflow:") ? "工作流 " + j.kind.slice(9) : j.kind)),
       h("td", {}, h("span", { class: (st[j.status] || ["", "badge"])[1] }, (st[j.status] || [j.status])[0])),
-      h("td", { class: "small muted nowrap" }, UI.when(j.updated || j.created)), h("td", { class: "small" }, j.error ? h("span", { style: { color: "var(--danger)" } }, j.error.slice(0, 160)) : ""))))
+      h("td", { class: "small muted nowrap" }, UI.when(j.updated || j.created)), h("td", { class: "small" }, j.error ? h("span", { style: { color: "var(--danger)" } }, j.error.slice(0, 160)) : "",
+        UI.jobProgress(j, { onStop: async () => { await UI.stopJob(pid, j.id); loadJobs(); } })))))
     : h("div", { class: "empty" }, "还没有任务"));
   if (jobs.some((j) => ["queued", "running"].includes(j.status))) jobsTimer = setTimeout(() => { loadJobs(); }, 5000);
 }
@@ -944,14 +945,16 @@ async function tuneDlg() {
   const def = bases.find((b) => b.ok && b.family === tr.family && b.size === tr.size); if (def) base.value = def.path;
   const iters = h("input", { class: "input", type: "number", min: 3, max: 300, value: 30 });
   const eps = h("input", { class: "input", type: "number", min: 3, max: 300, value: 30 });
+  const pat = h("input", { class: "input", type: "number", min: 0, max: 100, value: 8 });
   const last = (g.points || []).slice(-1)[0], spe = last?.time && g.epochs_done ? last.time / g.epochs_done : null;   // 上次训练每轮秒数
   const est = h("div", { class: "callout small" });
   const upd = () => {
     const total = Number(iters.value) * Number(eps.value);
     est.textContent = `一共要训 ${iters.value} 组 × ${eps.value} 轮 = ${total} 轮。` + (spe ? `按上次训练每轮约 ${Math.round(spe)} 秒估算，大约 ${(total * spe / 3600).toFixed(1)} 小时。` : "") +
-      "跑的时候显卡被占满，别同时训练别的模型；可以关掉页面，跑完后训练会自动用最好的参数。";
+      (Number(pat.value) > 0 ? `连续 ${pat.value} 组没有明显提高就提前结束（至少先试 10 组），实际往往用不了这么久。` : "") +
+      "跑的时候显卡被占满，别同时训练别的模型；可以关掉页面，在任务记录里看进度，也能随时“提前结束”用目前最好的一组。";
   };
-  iters.oninput = eps.oninput = upd; upd();
+  iters.oninput = eps.oninput = pat.oninput = upd; upd();
   const field = (label, el, help) => h("div", { class: "field" }, h("label", {}, label), el, help ? h("div", { class: "help" }, help) : null);
   const cur = S.tuned;
   UI.modal("自动调参", h("div", { class: "form" },
@@ -960,9 +963,10 @@ async function tuneDlg() {
     cur ? h("details", {}, h("summary", {}, `已有调参结果：${cur.at} · 数据集 ${cur.dataset_version} · 试了 ${cur.tried || cur.iterations} 组` + (cur.best_fitness != null ? ` · 最好 ${UI.pct(cur.best_fitness)}` : "")),
       h("div", { class: "mono tiny" }, Object.entries(cur.hyp || {}).map(([k, v]) => `${k}=${Number(v).toPrecision(3)}`).join("  "))) : null,
     h("div", { class: "grid k2" }, field("数据集", ds, "用最新、最大的那一版"), field("从哪个底座开始", base),
-      field("试多少组", iters, "一般 20–50 组；越多越可能找到好参数，也越慢"), field("每组训多少轮", eps, "20–50 轮；太少看不出好坏")),
+      field("试多少组", iters, "一般 20–50 组；越多越可能找到好参数，也越慢"), field("每组训多少轮", eps, "20–50 轮；太少看不出好坏"),
+      field("没提高就提前结束", pat, "连续这么多组最好成绩没提高（不到 0.3 分）就停，用最好的一组；0 = 一定试满")),
     est), [{ label: "取消" }, { label: "开始自动调参", kind: "primary", run: async () => {
-      const body = { dataset_version: ds.value, weights: base.value, iterations: Number(iters.value), epochs: Number(eps.value),
+      const body = { dataset_version: ds.value, weights: base.value, iterations: Number(iters.value), epochs: Number(eps.value), stop_patience: Number(pat.value) || 0,
         imgsz: tr.imgsz, batch: tr.batch > 0 ? tr.batch : 8, device: tr.device, workers: tr.workers, ...(UI.task(pid) ? { annotation_task: UI.task(pid) } : {}) };
       await UI.api(`/api/projects/${pid}/tools/model.tune`, { method: "POST", body });
       UI.toast("已开始自动调参，在下方“任务记录”看进度；跑完后训练向导会自动用最好的参数", false, 8000);

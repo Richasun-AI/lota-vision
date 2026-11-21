@@ -82,6 +82,16 @@ class TuneTest(unittest.TestCase):
             self.assertEqual((out["tried"], out["best_fitness"]), (2, 0.42))
             self.assertEqual((calls["iterations"], calls["epochs"], calls["optimizer"]), (5, 10, "AdamW"))
 
+    def test_tune_table_reads_ndjson(self):
+        # Ultralytics 8.4 写 tune_results.ndjson（每行一组），不再写 csv
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "tune"
+            out.mkdir()
+            (out / "tune_results.ndjson").write_text(
+                '{"iteration": 1, "fitness": 0.26, "hyperparameters": {"lr0": 0.01}}\n'
+                '{"iteration": 2, "fitness": 0.40, "hyperparameters": {"lr0": 0.0002}}\n\n', encoding="utf-8")
+            self.assertEqual(models._tune_table(Path(tmp)), (2, 0.40))
+
 
 class ProgressTest(unittest.TestCase):
     def test_progress_reads_strict_score_and_losses(self):

@@ -168,6 +168,11 @@ class Store:
         with self.connection() as db:
             db.execute("PRAGMA journal_mode=WAL")
             db.executescript(SCHEMA)
+            columns = {row[1] for row in db.execute("PRAGMA table_info(jobs)")}
+            if "progress" not in columns:   # 长任务的进度（旧库没有这一列）
+                db.execute("ALTER TABLE jobs ADD COLUMN progress TEXT")
+            if "stop_requested" not in columns:   # 运行中的长任务被要求“提前结束”（支持的工具在合适的时候收尾）
+                db.execute("ALTER TABLE jobs ADD COLUMN stop_requested INTEGER")
 
     @contextmanager
     def connection(self):
@@ -292,13 +297,23 @@ class Store:
             row = db.execute("SELECT * FROM jobs WHERE project_id=? AND id=?", (project_id, job_id)).fetchone()
         if not row:
             raise FileNotFoundError(f"Unknown job: {job_id}")
-        return unpack(row, "spec", "inputs", "outputs")
+        return unpack(row, "spec", "inputs", "outputs", "progress")
 
     def jobs(self, project_id, limit=50):
         self.project(project_id)
         with self.connection() as db:
-            return [dict(row) for row in db.execute("""SELECT id,project_id,revision,kind,status,current_step,error,created,updated
+            return [unpack(row, "progress") for row in db.execute("""SELECT id,project_id,revision,kind,status,current_step,error,created,updated,progress,stop_requested
                 FROM jobs WHERE project_id=? ORDER BY created DESC LIMIT ?""", (project_id, limit))]
+
+    def stop_requested(self, job_id):
+        with self.connection() as db:
+            row = db.execute("SELECT stop_requested FROM jobs WHERE id=?", (job_id,)).fetchone()
+        return bool(row and row[0])
+
+    def set_progress(self, job_id, worker, progress):
+        with self.connection() as db:
+            db.execute("UPDATE jobs SET progress=? WHERE id=? AND worker=? AND status='running'",
+                       (dumps(progress), job_id, worker))
 
     def claim(self, worker, ttl):
         now = time.time()
@@ -310,7 +325,7 @@ class Store:
                 WHERE jobs.status='queued' AND projects.active=1 ORDER BY jobs.created LIMIT 1""").fetchone()
             if not row:
                 return None
-            db.execute("""UPDATE jobs SET status='running',worker=?,lease=?,updated=?,error=NULL
+            db.execute("""UPDATE jobs SET status='running',worker=?,lease=?,updated=?,error=NULL,progress=NULL,stop_requested=NULL
                 WHERE id=?""", (worker, now + ttl, now, row["id"]))
             return unpack(row, "spec", "inputs", "outputs")
 
@@ -334,6 +349,22 @@ class Store:
             "resume": ("queued", ("paused", "failed", "interrupted")),
             "cancel": ("cancelled", ("queued", "paused", "failed", "interrupted")),
         }
+        with self.connection() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT status FROM jobs WHERE id=? AND project_id=?", (job_id, project_id)).fetchone()
+            if not row:
+                raise FileNotFoundError(f"Unknown job: {job_id}")
+            if command == "stop":   # 只是“请求”：支持的工具（如自动调参）在当前这一组跑完后收尾、保存结果
+                if row["status"] != "running":
+                    raise ValueError("只有运行中的任务能提前结束")
+                db.execute("UPDATE jobs SET stop_requested=1 WHERE id=?", (job_id,))
+            else:
+                new, eligible = transitions[command]
+                if row["status"] not in eligible:
+                    raise ValueError(f"Cannot {command} a {row['status']} job")
+                db.execute("UPDATE jobs SET status=?, updated=?, error=NULL WHERE id=?",
+                           (new, time.time(), job_id))
+        return self.job(project_id, job_id)
         new, eligible = transitions[command]
         with self.connection() as db:
             db.execute("BEGIN IMMEDIATE")

@@ -17,6 +17,7 @@ from pydantic import Field
 from . import config as deploy
 from .store import Spec
 from .tools import TOOLS, Selection, Tool
+from . import progress as job_progress
 from . import cleanup  # noqa: F401  注册：移除类别 / 排除 / 删除照片
 from . import vlmcheck  # noqa: F401  注册：AI 预检（qwen 看图，从旧 7870 巡检图片筛选迁移）
 from . import hub  # noqa: F401  注册：模型导出、评估记录（模型中心）
@@ -1245,6 +1246,7 @@ def find_by_model(c, weights="", model="", folder=str(deploy.IMAGES_DIR), photo_
                 "key": key, "step": c.step_id, "job": c.job_id, "scanned": scanned, "todo": len(todo),
                 "hits": len(hits), "total_files": total, "scanned_total": len(done) + scanned,
                 "seconds": round(time.time() - t0), "updated": time.strftime("%H:%M:%S")}), encoding="utf-8")
+            job_progress.report(scanned, len(todo), "张", f"扫了 {scanned}/{len(todo)} 张，命中 {len(hits)} 张")
     # 命中的复制进项目（按内容去重，同一张图在多个目录里只算一次），再登记进图库
     candidates = len(hits)
     if strategy == "uncertain":
@@ -2139,6 +2141,7 @@ class TuneSpec(Spec):
     weights: str = ""                                           # 空 = 标准底座（yolo26s）
     iterations: int = Field(default=30, ge=3, le=300)           # 试多少组
     epochs: int = Field(default=30, ge=3, le=300)               # 每组训多少轮
+    stop_patience: int = Field(default=8, ge=0, le=100)         # 连续这么多组成绩没提高就提前结束（0 = 试满）
     imgsz: int = Field(default=640, ge=32, le=4096)
     batch: int = Field(default=8, ge=1, le=512)
     device: str = "0"

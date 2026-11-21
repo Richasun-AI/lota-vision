@@ -17,6 +17,7 @@ import shutil
 import sqlite3
 import tempfile
 from uuid import uuid4
+from . import progress
 
 
 _IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,79}")
@@ -523,9 +524,11 @@ def train(project_dir: Path, dataset_version: str, model_version: str, weights: 
         data_root.mkdir()
         data = _stage_dataset(manifest, directory, data_root)
         model = _runtime_yolo(project_dir, staged_weights, manifest["task"])
-        results = model.train(
-            data=str(data), project=str(run), name="train", exist_ok=False, **options,
-        )
+        epochs = int(options.get("epochs") or 100)
+        with progress.watch(lambda: _train_progress(run / "train" / "results.csv", epochs)):
+            results = model.train(
+                data=str(data), project=str(run), name="train", exist_ok=False, **options,
+            )
     best = _inside(run, Path(model.trainer.best))
     trained_names = getattr(getattr(model.trainer, "model", None), "names", None)
     if trained_names is not None and _class_names(trained_names) != manifest["classes"]:
@@ -540,8 +543,85 @@ def train(project_dir: Path, dataset_version: str, model_version: str, weights: 
     return metadata
 
 
+def _results_rows(csv_file: Path) -> list[dict]:
+    """Ultralytics 每训完一轮往 results.csv 追加一行（列名前后有空格）"""
+    import csv
+    if not csv_file.is_file():
+        return []
+    rows = list(csv.DictReader(csv_file.read_text(encoding="utf-8").splitlines()))
+    return [{(k or "").strip(): (v or "").strip() for k, v in r.items()} for r in rows]
+
+
+def _score_of(row: dict) -> float | None:
+    for key in ("metrics/mAP50-95(B)", "metrics/mAP50-95(M)", "metrics/accuracy_top1"):
+        try:
+            return float(row[key])
+        except (KeyError, TypeError, ValueError):
+            continue
+    return None
+
+
+def _train_progress(csv_file: Path, epochs: int) -> dict | None:
+    rows = _results_rows(csv_file)
+    if not rows:
+        return {"done": 0, "total": epochs, "unit": "轮", "message": "准备数据、开始第 1 轮…"}
+    score = _score_of(rows[-1])
+    best = max((x for x in map(_score_of, rows) if x is not None), default=None)
+    msg = f"第 {len(rows)}/{epochs} 轮训完" + (f"；这一轮 mAP50-95 {score:.3f}" if score is not None else "") +         (f"，最好 {best:.3f}" if best is not None else "")
+    return {"done": len(rows), "total": epochs, "unit": "轮", "message": msg}
+
+
+def _tune_progress(run: Path, iterations: int, epochs: int) -> dict | None:
+    tried, best = _tune_table(run)
+    trains = sorted((d for d in run.iterdir() if d.is_dir() and d.name.startswith("train")),
+                    key=lambda d: d.stat().st_mtime, reverse=True) if run.is_dir() else []
+    epoch = len(_results_rows(trains[0] / "results.csv")) if trains else 0
+    epoch = min(epoch, epochs) if tried < iterations else 0
+    msg = f"已试完 {tried}/{iterations} 组" + (f"，第 {tried + 1} 组训到第 {epoch}/{epochs} 轮" if tried < iterations else "") +         (f"；目前最好 fitness {best:.3f}" if best is not None else "")
+    return {"done": min(tried + epoch / max(epochs, 1), iterations), "total": iterations, "unit": "组", "message": msg,
+            "best": best, "stoppable": True}
+
+
+def _tune_scores(run: Path) -> list[float]:
+    """每组的 fitness（按试的先后）。新版 Ultralytics 写 tune_results.ndjson（每行一组），旧版写 tune_results.csv"""
+    scores = []
+    table = next(run.rglob("tune_results.ndjson"), None)
+    if table is not None:
+        for line in table.read_text(encoding="utf-8").splitlines():
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(row, dict):
+                fit = row.get("fitness")
+                scores.append(float(fit) if isinstance(fit, (int, float)) else 0.0)
+        return scores
+    table = next(run.rglob("tune_results.csv"), None)
+    if table is not None:
+        import csv
+        for r in csv.DictReader(table.read_text(encoding="utf-8").splitlines()):
+            try:
+                scores.append(float(r.get("fitness") or 0))
+            except ValueError:
+                scores.append(0.0)
+    return scores
+
+
+def _tune_table(run: Path) -> tuple[int, float | None]:
+    """调参试过几组、最好分数"""
+    scores = _tune_scores(run)
+    return len(scores), (max(scores) if scores else None)
+
+
+def tune_plateau(scores: list[float], patience: int, min_delta: float = 0.003, min_groups: int = 10) -> bool:
+    """调参是否该提前停：最近 patience 组都没比之前的最好成绩高出 min_delta（至少先试 min_groups 组）"""
+    if patience <= 0 or len(scores) < max(min_groups, patience + 1):
+        return False
+    return max(scores) - max(scores[:-patience]) < min_delta
+
+
 def tune(project_dir: Path, dataset_version: str, weights: str | Path, *, iterations: int = 30, epochs: int = 30,
-         **params) -> dict:
+         stop_patience: int = 8, **params) -> dict:
     """自动调参：Ultralytics Tuner（遗传算法）在一个数据集版本上试 iterations 组超参数，每组训 epochs 轮，
     按 fitness（mAP50-95 为主的加权分）挑最好的一组。每组都是一次完整训练，很耗时"""
     import yaml
@@ -559,24 +639,32 @@ def tune(project_dir: Path, dataset_version: str, weights: str | Path, *, iterat
         data_root.mkdir()
         data = _stage_dataset(manifest, directory, data_root)
         model = _runtime_yolo(project_dir, staged, manifest["task"])
-        model.tune(data=str(data), epochs=int(epochs), iterations=int(iterations), project=str(run), name="tune",
-                   exist_ok=True, plots=False, save=False, val=True, **options)
+        # 一组一组地跑（Tuner 会从 tune_results.ndjson 接着试下一组，变异照样参考前面所有组），
+        # 每组之间看要不要提前结束：成绩不再提高（patience），或用户在任务记录里点了“提前结束”
+        stopped = ""
+        with progress.watch(lambda: _tune_progress(run, int(iterations), int(epochs)), interval=15):
+            for n in range(1, int(iterations) + 1):
+                if _tune_table(run)[0] >= n:
+                    continue
+                model.tune(data=str(data), epochs=int(epochs), iterations=n, project=str(run), name="tune",
+                           resume=True, plots=False, save=False, val=True, **options)
+                scores = _tune_scores(run)
+                if n < int(iterations) and progress.stop_requested():
+                    stopped = f"按要求提前结束：试了 {len(scores)} 组，用其中最好的一组"
+                    break
+                if n < int(iterations) and tune_plateau(scores, int(stop_patience)):
+                    stopped = f"最近 {int(stop_patience)} 组成绩没再提高，提前结束：试了 {len(scores)} 组，用其中最好的一组"
+                    break
     best_file = next(run.rglob("best_hyperparameters.yaml"), None)
     if best_file is None:
         raise ValueError("自动调参没跑出结果（每一组都没训练成功）；看任务日志里的报错")
     raw = yaml.safe_load(best_file.read_text(encoding="utf-8")) or {}
     hyp = {k: float(v) for k, v in raw.items() if k in TUNE_KEYS and isinstance(v, (int, float))}
-    tried, best_fitness = 0, None
-    table = next(run.rglob("tune_results.csv"), None)
-    if table is not None:
-        import csv
-        rows = list(csv.DictReader(table.read_text(encoding="utf-8").splitlines()))
-        tried = len(rows)
-        scores = [float(r.get("fitness") or 0) for r in rows if (r.get("fitness") or "").strip()]
-        best_fitness = max(scores) if scores else None
+    tried, best_fitness = _tune_table(run)
     return {"dataset_version": dataset_version, "dataset_id": manifest["dataset_id"], "task": manifest["task"],
             "classes": manifest["classes"], "initial_weights": initial.name, "iterations": int(iterations), "epochs": int(epochs),
-            "tried": tried, "best_fitness": best_fitness, "hyp": hyp, "options": options,
+            "tried": tried, "best_fitness": best_fitness, "hyp": hyp, "options": options, "stop_patience": int(stop_patience),
+            "stopped_early": stopped,
             "run": run.relative_to(Path(project_dir).resolve()).as_posix()}
 
 

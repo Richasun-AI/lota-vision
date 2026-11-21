@@ -632,7 +632,7 @@ async function assistDlg() {
       status.replaceChildren(h("span", { class: "badge info" }, "扫描中…"), " 显卡上大约每分钟几千张；可以关掉这个窗口，扫完会提示");
       const result = await UI.runTool(pSel.value, "types.classify_by_weights", args, { timeoutSec: 6 * 3600,
         onProgress: (j) => status.replaceChildren(h("span", { class: "badge info" }, j.status === "running" ? "扫描中…" : "排队中…"),
-          ` 已用 ${Math.round((Date.now() - t0) / 1000)} 秒；可以关掉这个窗口，扫完会提示`) })
+          ` 已用 ${UI.dur((Date.now() - t0) / 1000)}；可以关掉这个窗口，扫完会提示（任务记录里也能看进度）`, UI.jobProgress(j)) })
         .catch((e) => { status.replaceChildren(h("span", { style: { color: "var(--danger)" } }, "❌ " + e.message)); throw e; });
       const by = Object.entries(result.by_type || {});
       UI.toast(`扫完 ${result.scanned} 张，给出 ${result.suggested} 条建议` + (result.remaining ? `；还有 ${result.remaining} 张没扫，再点一次接着扫` : ""), false, 8000);

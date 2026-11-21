@@ -14,7 +14,7 @@ from pathlib import Path
 
 from pydantic import Field
 
-from . import imagelib
+from . import imagelib, progress
 from .store import Spec
 
 
@@ -207,6 +207,7 @@ def classify_types(c, rules, model="", weights="", scope_types="", min_confidenc
                 scanned += 1
             out.flush()
             log.flush()
+            progress.report(scanned, len(todo), "张", f"扫了 {scanned}/{len(todo)} 张，给出 {sum(suggested.values())} 条建议")
     done_now = set(done_file.read_text(encoding="utf-8").splitlines())
     name = lambda t: tax.get(t, {}).get("name", t)
     return {"scanned": scanned, "suggested": sum(suggested.values()),

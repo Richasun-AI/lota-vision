@@ -1281,13 +1281,42 @@ async function modelsPage(){
  annotationTaskPicker(),panel(...["model.register","model.train","model.evaluate","model.alias","model.predict"].map(id=>button(state.tools.find(t=>t.id===id).title,()=>toolDialog(id)))),
  code(await request(pathFor()+"/models")));
 }
+// 长任务的进度：进度条 + 说明 + 已用时间 + 预计还要多久（工具上报到任务表的 progress）
+function jobDuration(sec){
+ sec=Math.max(0,Math.round(sec));const hh=Math.floor(sec/3600),mm=Math.floor(sec%3600/60);
+ return hh?`${hh} 小时 ${mm} 分`:mm?`${mm} 分`:`${sec} 秒`;
+}
+function jobProgressView(job){
+ if(job.status!=="running")return null;
+ const p=job.progress||{},now=Date.now()/1000,started=p.started||job.updated||job.created,parts=[`已运行 ${jobDuration(now-started)}`];
+ let bar=null;
+ if(p.total){
+  const frac=Math.min(1,Math.max(0,(p.done||0)/p.total));
+  bar=h("div",{style:"height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden;margin:6px 0;max-width:520px"},
+   h("div",{style:`width:${(frac*100).toFixed(1)}%;height:100%;background:#2563eb`}));
+  parts.unshift(`${Math.round(frac*100)}%`);
+  const spent=(p.at||now)-p.started;
+  if(frac>0.01&&frac<1&&spent>30){const left=spent/frac-spent-(now-(p.at||now));
+   parts.push(left>0?`预计还要 ${jobDuration(left)}（约 ${new Date((now+left)*1000).toTimeString().slice(0,5)} 完成）`:"快完成了");}
+ }
+ if(p.steps>1)parts.push(`第 ${p.step_index}/${p.steps} 步`);
+ if(p.at&&now-p.at>1800)parts.push(`⚠ ${jobDuration(now-p.at)}没有新进度`);
+ return h("div",{class:"small"},bar,p.message?h("div",{},p.message):null,h("div",{class:"muted"},parts.join(" · ")),
+  p.stoppable?button(job.stop_requested?"已请求提前结束…":"提前结束（用目前最好的）",asyncClick(async()=>{
+   await request(pathFor()+"/jobs/"+job.id+"/control","POST",{command:"stop"});
+   notifyUser("已请求提前结束：当前这一组跑完就收尾，结果照常保存");navigate("jobs");})):null);
+}
 async function jobsPage(){
  const jobs=await request(pathFor()+"/jobs");
- return h("div",{},page("任务记录","查看执行步骤与结果，失败任务可从已完成步骤后续跑。"),
+ const generation=state.generation;
+ if(jobs.some(j=>["queued","running"].includes(j.status)))   // 有运行中的：每 5 秒刷新进度（离开这一页就停）
+  setTimeout(()=>{if(state.tab==="jobs"&&state.generation===generation&&!document.querySelector("dialog[open]"))navigate("jobs");},5000);
+ return h("div",{},page("任务记录","查看执行步骤与结果，失败任务可从已完成步骤后续跑。运行中的长任务（训练、自动调参、扫描）显示进度和预计完成时间。"),
  button("刷新",()=>navigate("jobs")), ...jobs.map(job=>panel(h("strong",{},job.kind),statusPill(job.status),
  button("查看结果",asyncClick(async()=>openDialog(job.id,code(await request(pathFor()+"/jobs/"+job.id)),true))),
  ...(["queued","paused","failed","interrupted"].includes(job.status)?[button(job.status==="queued"?"暂停":"续跑",asyncClick(async()=>{
  await request(pathFor()+"/jobs/"+job.id+"/control","POST",{command:job.status==="queued"?"pause":"resume"});navigate("jobs");}))]:[]),
+ jobProgressView(job),
  job.error?h("p",{class:"error"},job.error):null)));
 }
 $("#project-picker").addEventListener("change",()=>initialize($("#project-picker").value));

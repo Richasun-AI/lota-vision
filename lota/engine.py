@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from .store import Store, Step, Workflow
 from .tools import Context, TOOLS
 from . import flow  # noqa: F401  注册新工具（导入文件夹、导入 YOLO 标签、覆盖率判定），worker 也要能执行
+from . import progress
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +130,15 @@ class Engine:
                     self.store.checkpoint(job["id"], worker, outputs, current)
                     continue
                 context = Context(directory, config, self, job["id"], current)
-                outputs[current] = TOOLS[step.tool].call(context, args)
+                index, count = workflow.steps.index(step) + 1, len(workflow.steps)
+                reporter = progress.Reporter(lambda data, s=current, i=index: self.store.set_progress(
+                    job["id"], worker, {**data, "step": s, "step_index": i, "steps": count}),
+                    should_stop=lambda: self.store.stop_requested(job["id"]))
+                token = progress.bind(reporter)
+                try:
+                    outputs[current] = TOOLS[step.tool].call(context, args)
+                finally:
+                    progress.unbind(token)
                 self.store.checkpoint(job["id"], worker, outputs, current)
             self.store.checkpoint(job["id"], worker, outputs, None, "succeeded")
         except Exception as exc:
