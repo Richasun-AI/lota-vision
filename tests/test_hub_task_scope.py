@@ -16,7 +16,9 @@ except ImportError:   # 本机没装 fastapi：只要注册路由用到的两个
             super().__init__(detail)
             self.status_code, self.detail = status_code, detail
 
-    sys.modules["fastapi"] = types.SimpleNamespace(Body=lambda *a, **k: None, HTTPException=HTTPException)
+    sys.modules["fastapi"] = types.SimpleNamespace(Body=lambda *a, **k: None, HTTPException=HTTPException,
+                                                   File=lambda *a, **k: None, Form=lambda *a, **k: None, UploadFile=object)
+    sys.modules["fastapi.responses"] = types.SimpleNamespace(FileResponse=object, StreamingResponse=object)
 
 from lota import hub
 from lota.store import Scenario, Store
@@ -69,6 +71,36 @@ class HubTaskScopeTest(unittest.TestCase):
             self.assertEqual(seen[1][0].parts[-2:], ("annotation-tasks", "weeds"))
             with self.assertRaises(Exception):
                 status("site", annotation_task="nope")
+
+
+class TaskDirEndpointsTest(unittest.TestCase):
+    """数据集 / 模型 / 总览：选了标注任务读任务目录；图库、设置仍是子项目的"""
+    def test_dataset_model_endpoints_follow_task(self):
+        import json
+        with tempfile.TemporaryDirectory() as tmp:
+            store = Store(Path(tmp) / "runtime")
+            store.save_project("site", Scenario.model_validate({
+                "name": "Site", "classes": ["mcb"],
+                "annotation_tasks": {"weeds": {"name": "Weeds", "task": "detect", "classes": ["weed"]}}}))
+            root = store.project_dir("site")
+            root.mkdir(parents=True, exist_ok=True)
+            (root / "settings.json").write_text(json.dumps({"naming": {"dataset": "X-{project}"}}), encoding="utf-8")
+            router, engine = FakeRouter(), SimpleNamespace(store=store)
+            hub.register_routes(router, engine, lambda pid: store.project_dir(pid))
+            seen = []
+            with mock.patch.object(hub, "dataset_cards", lambda d: seen.append(("ds", Path(d))) or []),                     mock.patch.object(hub, "model_cards", lambda d: seen.append(("ms", Path(d))) or {"models": [], "aliases": {}}),                     mock.patch.object(hub, "accepted_count", lambda d: seen.append(("acc", Path(d))) or 7):
+                r = router.routes[("GET", "/projects/{project_id}/hub/datasets")]("site", annotation_task="weeds")
+                self.assertEqual(r["accepted_annotations"], 7)
+                s = router.routes[("GET", "/projects/{project_id}/hub/summary")]("site", annotation_task="weeds")
+                router.routes[("GET", "/projects/{project_id}/hub/datasets")]("site")
+            task = root / "annotation-tasks" / "weeds"
+            self.assertTrue(all(d == task for _, d in seen[:-2]))           # 选了任务：都读任务目录
+            self.assertEqual(seen[-1][1], root)                              # 没选任务：照旧读子项目
+            self.assertEqual(s["images"], 0)                                 # 图库按子项目统计
+            self.assertEqual(s["settings"]["naming"]["dataset"], "X-{project}")
+            self.assertEqual(hub.load_settings(task)["naming"]["dataset"], "X-{project}")   # 任务目录没有设置：用子项目的
+            with self.assertRaises(Exception):
+                router.routes[("GET", "/projects/{project_id}/hub/models")]("site", annotation_task="nope")
 
 
 if __name__ == "__main__":

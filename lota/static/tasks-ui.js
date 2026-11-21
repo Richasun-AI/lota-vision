@@ -1,7 +1,7 @@
 function annotationTaskPicker(){
  const definitions=state.project.config.annotation_tasks||{};
  const picker=select([["","历史默认任务"],...Object.entries(definitions).map(([id,t])=>[id,t.name+" · "+t.task])],state.annotationTask||"");
- picker.onchange=()=>{state.annotationTask=picker.value;navigate(state.tab);};
+ picker.onchange=()=>{saveAnnotationTask(state.project,picker.value);navigate(state.tab);};
  return panel(field("当前标注任务",picker),button("管理标注任务",()=>annotationTaskEditor()),button("\u67e5\u770b\u6807\u6ce8\u754c\u9762\u914d\u7f6e",asyncClick(async()=>{
  if(!state.annotationTask)throw Error("Select an annotation task first");
  const data=await request(pathFor()+"/annotation-tasks/"+state.annotationTask+"/config");
@@ -81,7 +81,7 @@ function annotationTaskEditor(){
   if(url.value.trim())value.label_studio={base_url:url.value.trim(),project_id:Number(studioId.value),token_env:env.value.trim(),local_files_root:files.value.trim()};
   config.annotation_tasks={...definitions,[taskId]:value};
   await request(pathFor(project),"PUT",{config,expected_revision:project.revision});
-  state.annotationTask=taskId;dialog.close();await initialize(project.id);
+  saveAnnotationTask(project,taskId);dialog.close();await initialize(project.id);
  });
  openDialog("标注任务管理",form,true);
 }

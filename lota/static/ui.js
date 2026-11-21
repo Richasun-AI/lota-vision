@@ -6,7 +6,32 @@ const UI = (() => {
     get: (k) => { try { return localStorage.getItem(k) || sessionStorage.getItem(k) || ""; } catch { return ""; } },
     set: (k, v) => { try { localStorage.setItem(k, v); sessionStorage.setItem(k, v); } catch {} },
   };
+  // 当前标注任务：按子项目记住，标注系统 / 数据集 / 模型中心共用（key 和工作台 app.js 一样）
+  const TASK_KEY = (pid) => "lota.annotationTask:" + pid;
+  function task(pid) {
+    pid = pid || project();
+    let t = "";
+    try { t = localStorage.getItem(TASK_KEY(pid)) || ""; } catch {}
+    const info = projects.find((p) => p.id === pid);
+    if (t && info && !(info.config?.annotation_tasks || {})[t]) t = "";   // 任务被删了：回到子项目默认
+    return t;
+  }
+  function setTask(pid, t) { try { t ? localStorage.setItem(TASK_KEY(pid), t) : localStorage.removeItem(TASK_KEY(pid)); } catch {} }
+  function taskInfo(pid) {   // 当前范围的任务类型和标签
+    pid = pid || project();
+    const cfg = projects.find((p) => p.id === pid)?.config || {}, t = task(pid), def = t ? (cfg.annotation_tasks || {})[t] : null;
+    return { id: t, name: def ? def.name : "", task: (def || cfg).task || "detect", classes: (def || cfg).classes || [] };
+  }
+  // 数据集、模型、训练进度、质检、试一试：按当前标注任务的目录取（图片预览、设置、上传仍是子项目的）
+  const TASK_PATH = /^\/api\/projects\/([^/?]+)\/(hub\/(summary|models|datasets|holdout)|datasets\/|models\/|train-progress|qa|try-video\/)/;
+  function withTask(url) {
+    const m = TASK_PATH.exec(url);
+    if (!m || /[?&]annotation_task=/.test(url)) return url;
+    const t = task(decodeURIComponent(m[1]));
+    return t ? url + (url.includes("?") ? "&" : "?") + "annotation_task=" + encodeURIComponent(t) : url;
+  }
   async function rawFetch(url, opt = {}) {
+    url = withTask(url);
     for (let i = 0; i < 3; i++) {
       const headers = { ...(opt.headers || {}) }, t = store.get(TK);
       if (t) headers.Authorization = "Bearer " + t;
@@ -108,6 +133,8 @@ const UI = (() => {
 
   // 提交一个工具任务并等待结果（progress 回调显示状态）
   async function runTool(pid, tool, args = {}, { onProgress, timeoutSec = 3600 } = {}) {
+    const t = task(pid);   // 标注 / 数据集 / 模型 / 质检工具：在当前标注任务里跑
+    if (t && /^(labels|dataset|model|quality)\./.test(tool) && !("annotation_task" in args)) args = { ...args, annotation_task: t };
     let job;
     try { job = await api(`/api/projects/${pid}/tools/${tool}`, { method: "POST", body: args }); }
     catch (e) {
@@ -178,5 +205,17 @@ const UI = (() => {
   function pitfall(items, title = "⚠️ 避坑") {
     return h("div", { class: "callout warn pitfall" }, h("b", {}, title), h("ul", {}, ...items.map((t) => h("li", {}, t))));
   }
-  return { api, blobUrl, rawFetch, h, nav, project, projectInfo, onProject, toast, modal, runTool, lineChart, drawBoxes, pct, when, bytes, store, pitfall };
+  // 页面顶部的“当前标注任务”选择（数据集、模型中心用）；改了就记住并回调刷新
+  function taskPicker(pid, onChange) {
+    const cfg = projects.find((p) => p.id === pid)?.config || {}, tasks = Object.entries(cfg.annotation_tasks || {});
+    if (!tasks.length) return null;
+    const sel = h("select", { title: "数据集、模型、训练都按这个标注任务（和标注系统页的选择同步）" },
+      h("option", { value: "" }, "历史默认任务（子项目本身）"),
+      ...tasks.map(([id, t]) => h("option", { value: id }, `${t.name} · ${t.task}`)));
+    sel.value = task(pid);
+    sel.onchange = () => { setTask(pid, sel.value); onChange && onChange(sel.value); };
+    return h("label", { class: "row", style: { gap: "6px", alignItems: "center" } }, h("span", { class: "small muted" }, "当前标注任务"), sel);
+  }
+  return { api, blobUrl, rawFetch, h, nav, project, projectInfo, onProject, toast, modal, runTool, lineChart, drawBoxes, pct, when, bytes, store, pitfall,
+           task, setTask, taskInfo, withTask, taskPicker };
 })();

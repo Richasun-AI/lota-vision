@@ -299,6 +299,18 @@ function mergeDialog(project) {
     h("div", {class: "actions"}, button("试合并（只看报告）", trial), go), out), true);
 }
 
+// 当前标注任务按子项目存在浏览器里，key 和 ui.js 一样：标注系统 / 数据集 / 模型中心切过去都是同一个任务
+function loadAnnotationTask(project){
+  if(!project)return "";
+  let t="";try{t=localStorage.getItem("lota.annotationTask:"+project.id)||"";}catch{}
+  return t&&(project.config?.annotation_tasks||{})[t]?t:"";
+}
+function saveAnnotationTask(project,t){
+  state.annotationTask=t||"";
+  if(!project)return;
+  try{t?localStorage.setItem("lota.annotationTask:"+project.id,t):localStorage.removeItem("lota.annotationTask:"+project.id);}catch{}
+}
+
 async function initialize(preferred) {
   const generation = ++state.generation;
   try {
@@ -309,7 +321,7 @@ async function initialize(preferred) {
     const chosen = preferred ?? state.project?.id ?? (()=>{try{return sessionStorage.getItem("lota-project")||localStorage.getItem("lota-project");}catch{return null;}})();
     const previousId=state.project?.id;
     state.project = projects.find((project) => project.id === chosen) || projects[0] || null;
-    if(previousId && previousId!==state.project?.id)state.annotationTask="";
+    if(previousId!==state.project?.id)state.annotationTask=loadAnnotationTask(state.project);   // 每个子项目记住自己的当前标注任务（数据集、模型中心页同一份）
     if (state.project) shareCurrentProject(state.project.id);
     $("#connection-dot").className = "indicator ready";
     await navigate(state.tab);

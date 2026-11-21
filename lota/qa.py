@@ -126,8 +126,9 @@ def register_routes(router, engine, directory):
     from fastapi import Body
 
     @router.get("/projects/{project_id}/qa", tags=["qa"])
-    def qa_list(project_id: str):
-        folder = directory(project_id) / "qa"
+    def qa_list(project_id: str, annotation_task: str = ""):
+        from .hub import task_dir
+        folder = task_dir(engine, directory, project_id, annotation_task) / "qa"
         out = []
         for f in sorted(folder.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True) if folder.is_dir() else []:
             if f.name.endswith(".decisions.json"):
@@ -137,12 +138,12 @@ def register_routes(router, engine, directory):
         return out
 
     @router.get("/projects/{project_id}/qa/{qa_id}", tags=["qa"])
-    def qa_get(project_id: str, qa_id: str):
-        from .hub import load_settings
-        root = directory(project_id)
+    def qa_get(project_id: str, qa_id: str, annotation_task: str = ""):
+        from .hub import load_settings, task_dir
+        root = task_dir(engine, directory, project_id, annotation_task)
         f = root / "qa" / f"{Path(qa_id).name}.json"
         d = json.loads(f.read_text(encoding="utf-8"))
-        links = _ls_links(root, load_settings(root)["label_studio"]["public_url"])
+        links = _ls_links(root, load_settings(directory(project_id))["label_studio"]["public_url"])   # 外网地址是子项目设置
         dec = root / "qa" / f"{Path(qa_id).name}.decisions.json"
         d["decisions"] = json.loads(dec.read_text(encoding="utf-8")) if dec.is_file() else {}
         for it in d["items"]:
@@ -150,8 +151,9 @@ def register_routes(router, engine, directory):
         return d
 
     @router.post("/projects/{project_id}/qa/{qa_id}/decisions", tags=["qa"])
-    def qa_decide(project_id: str, qa_id: str, payload: dict = Body(...)):
-        f = directory(project_id) / "qa" / f"{Path(qa_id).name}.decisions.json"
+    def qa_decide(project_id: str, qa_id: str, payload: dict = Body(...), annotation_task: str = ""):
+        from .hub import task_dir
+        f = task_dir(engine, directory, project_id, annotation_task) / "qa" / f"{Path(qa_id).name}.decisions.json"
         d = json.loads(f.read_text(encoding="utf-8")) if f.is_file() else {}
         for k, v in (payload.get("decisions") or {}).items():
             if v:

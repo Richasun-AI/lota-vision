@@ -16,7 +16,7 @@ async function render() {
   app.replaceChildren(
     h("div", { class: "page-head" },
       h("div", {}, h("h1", {}, "数据集"), h("p", {}, `「${info?.config?.name || pid}」的数据集版本。每个版本是某一时刻已复核标注的“快照”，打包后不会再变，训练和评估都基于它，结果可追溯、可复现。`)),
-      h("div", { class: "row" }, h("a", { class: "btn", href: "/models" }, "去模型中心"),
+      h("div", { class: "row" }, UI.taskPicker(pid, render) || "", h("a", { class: "btn", href: "/models" }, "去模型中心"),
         h("button", { class: "btn primary lg", onclick: () => publish(pid, settings) }, "＋ 打包最新标注"))),
     h("div", { class: "grid k4" },
       kpi("已复核的标注", accepted_annotations + " 张", "在 Label Studio 提交、并回收进来的"),
@@ -82,9 +82,10 @@ function negWarn(d) {
 function mini(label, v) { return h("div", {}, h("div", { class: "small muted" }, label), h("div", { style: { fontSize: "18px", fontWeight: 700 } }, v ?? 0)); }
 
 async function publish(pid, settings) {
-  const name = settings.naming.dataset.replace("{project}", pid);
+  const name = settings.naming.dataset.replace("{project}", (UI.task(pid) ? pid + "-" + UI.task(pid) : pid));   // 选了标注任务：名字里带任务代码
+  const ti = UI.taskInfo(pid);
   UI.modal("打包最新标注为新数据集", h("div", { class: "form" },
-    h("p", {}, h("strong", {}, `子项目：${UI.projectInfo(pid)?.config?.name || pid}（${pid}）`)),
+    h("p", {}, h("strong", {}, `子项目：${UI.projectInfo(pid)?.config?.name || pid}（${pid}）` + (ti.id ? `　标注任务：${ti.name}（${ti.id}）` : "　标注任务：历史默认"))),
     h("p", {}, `会把所有已复核的标注打包成一个新版本，按“${name}”自动编号；验证 ${Math.round(settings.split.val * 100)}%、测试 ${Math.round(settings.split.test * 100)}%（随机种子 ${settings.split.seed}，同一张图每次都分到同一部分）。`),
     h("div", { class: "callout" }, "如果 Label Studio 里还有刚提交、没回收的标注，先在工作流里跑一次「回收标注」，或用「主动学习一轮」模板（它会先回收）。"),
     UI.pitfall([
@@ -98,9 +99,9 @@ async function publish(pid, settings) {
       let out;
       try { out = await UI.runTool(pid, "dataset.publish", { version: name, val_fraction: settings.split.val, test_fraction: settings.split.test, seed: settings.split.seed }); }
       catch (e) {
-        if (/No accepted samples/i.test(e.message)) throw new Error(`子项目「${UI.projectInfo(pid)?.config?.name || pid}」还没有已复核的标注，没法打包。` +
+        if (/No accepted samples/i.test(e.message)) throw new Error(`子项目「${UI.projectInfo(pid)?.config?.name || pid}」` + (ti.id ? `的标注任务「${ti.name}」` : "（历史默认任务）") + "还没有已复核的标注，没法打包。" +
           "标注在 Label Studio 里做完后，先到工作台「标注系统」点“立即回收标注”；每张图提交前要选 Targets reviewed（框都画完了）或 No target（没有目标），才算已复核。" +
-          "如果标注是在别的子项目里做的，先在顶部切换子项目。");
+          "如果标注是在别的子项目或别的标注任务里做的，先在顶部切换子项目 / 标注任务。");
         throw e;
       }
       UI.toast(`已打包 ${out.version}`); render();
