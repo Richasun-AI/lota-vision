@@ -638,12 +638,16 @@ def review_items(directory, task, classes, public_url=""):
     db = Path(directory) / "annotations" / "index.sqlite3"
     if not db.is_file():
         return []
+    from .labels import excluded_images
     stale = {k for k, v in rereview_candidates(directory, task, classes).items() if v[0] == "stale"}
+    rejected = excluded_images(directory)   # 从这个标注任务里排除了的图（质量不行）不再列出来
     with closing(sqlite3.connect(db, timeout=10)) as conn:
         rows = conn.execute("SELECT r.image_id, r.status, r.reason, r.original FROM current_annotations c JOIN revisions r "
                             "ON r.task=c.task AND r.image_id=c.image_id AND r.revision=c.revision WHERE c.task=?", (task,)).fetchall()
     out = []
     for image_id, status, reason, original in rows:
+        if image_id in rejected:
+            continue
         if status == "accepted" and image_id not in stale:
             continue
         if status == "unlabeled" and reason == "No completed annotation":
@@ -673,6 +677,67 @@ def review_items(directory, task, classes, public_url=""):
                     "boxes": boxes, "max_rotation": max((abs(b["rotation"]) for b in boxes), default=0), "links": links})
     order = {"rotated": 0, "class": 1, "coverage": 2, "conflict": 3, "geometry": 4, "unsure": 5, "other": 6, "stale": 7}
     return sorted(out, key=lambda r: (order.get(r["kind"], 9), r["image_id"]))
+
+
+# ── 排除质量不行的图：记在当前标注任务里（不改图库的复核状态），可顺便删掉它在 Label Studio 里的任务 ──
+class ExcludeImages(Spec):
+    image_ids: list[str] = Field(min_length=1, max_length=5000)
+    delete_in_label_studio: bool = True     # 删掉当前 Label Studio 项目里这些图的任务（不再排在标注队列里）
+    note: str = Field(default="质量不行，从标注中排除", max_length=200)
+    restore: bool = False                   # 撤销排除（Label Studio 任务删了的要重新提交）
+
+
+def exclude_images(c, image_ids, delete_in_label_studio=True, note="质量不行，从标注中排除", restore=False):
+    """拍糊、拍错、和任务无关的图：不进这个任务的数据集、不再送去标注、从“收不进来的标注”里消失。
+    只记在当前标注任务里，图库里的照片和复核状态不动；restore=True 撤销"""
+    import sqlite3
+    from contextlib import closing
+    from .labels import set_excluded
+    from .tasks import live_label_studio
+    ids = list(dict.fromkeys(image_ids))
+    if restore:
+        left = set_excluded(c.directory, ids, restore=True)
+        return {"restored": len(ids), "excluded_total": len(left),
+                "message": f"已恢复 {len(ids)} 张；在 Label Studio 里删掉了任务的，要重新“提交所选图片”"}
+    set_excluded(c.directory, ids, note)
+    done = ids
+    deleted, failed = 0, []
+    ls = live_label_studio(c) if delete_in_label_studio else None
+    if ls and ls.get("project_id"):
+        pid = ls["project_id"]
+        db = Path(c.directory) / "annotations" / "index.sqlite3"
+        remote = []
+        if db.is_file():
+            with closing(sqlite3.connect(db, timeout=10)) as conn:
+                marks = ",".join("?" * len(done))
+                remote = conn.execute(f"SELECT image_id, remote_id FROM label_studio_links WHERE project_id=? AND image_id IN ({marks})",
+                                      (pid, *done)).fetchall() if done else []
+        client = _ls_client(ls)
+        gone = []
+        for image_id, rid in remote:
+            try:
+                client._request("DELETE", f"/api/tasks/{int(rid)}/")
+                deleted += 1
+                gone.append((image_id, rid))
+            except RuntimeError as e:
+                if "HTTP 404" in str(e):          # 已经在 Label Studio 里删掉了
+                    gone.append((image_id, rid))
+                else:
+                    failed.append(f"{image_id[:12]}: {e}")
+        if gone:
+            with closing(sqlite3.connect(db, timeout=10)) as conn, conn:
+                conn.executemany("DELETE FROM label_studio_links WHERE project_id=? AND image_id=? AND remote_id=?",
+                                 [(pid, i, r) for i, r in gone])
+    msg = f"已从这个标注任务排除 {len(done)} 张（不进数据集、不再送去标注）"
+    if delete_in_label_studio:
+        msg += f"，删掉 Label Studio 任务 {deleted} 个" if ls else "；这个范围还没连 Label Studio，没有删任务"
+    if failed:
+        msg += f"；{len(failed)} 个任务没删掉"
+    return {"excluded": len(done), "image_ids": done, "label_studio_deleted": deleted, "failed": failed[:20],
+            "message": msg + "。要恢复：标注系统页“已排除的图”里点恢复。"}
+
+
+TOOLS["labels.exclude"] = Tool("排除质量不行的图（可同时删掉 Label Studio 任务）", ExcludeImages, exclude_images)
 
 
 # ── 批量补确认：画了框（分类：选了类别）但忘了选确认选项的任务，统一补上 Targets reviewed / Category reviewed 再回收 ──
@@ -998,6 +1063,43 @@ def _ensure_ls(c):
     return live_label_studio(c), created
 
 
+def ls_prediction_result(c, task, p):
+    """一张图的模型预测（models.predict 的一项）→ Label Studio 的 prediction result（框 / 旋转框 / 多边形 / 关键点）"""
+    w, h = p.get("width") or 1, p.get("height") or 1
+    res = []
+    for d in p.get("detections") or []:
+        x1, y1, x2, y2 = d["xyxy"]
+        if task == "obb" and d.get("obb"):   # 旋转框：四角点 → Label Studio 可旋转矩形（左上角 + 宽高 + 角度）
+            import math
+            (ax, ay), (bx, by), (cx_, cy_), _ = d["obb"]
+            bw, bh = math.hypot(bx - ax, by - ay), math.hypot(cx_ - bx, cy_ - by)
+            res.append({"from_name": "objects", "to_name": "image", "type": "rectanglelabels",
+                        "original_width": w, "original_height": h, "image_rotation": 0,
+                        "value": {"x": ax / w * 100, "y": ay / h * 100, "width": bw / w * 100, "height": bh / h * 100,
+                                  "rotation": math.degrees(math.atan2(by - ay, bx - ax)) % 360, "rectanglelabels": [d["label"]]},
+                        "score": d.get("confidence")})
+            continue
+        if task == "segment" and d.get("polygon") and len(d["polygon"]) >= 3:   # 分割：多边形预标注
+            res.append({"from_name": "objects", "to_name": "image", "type": "polygonlabels",
+                        "original_width": w, "original_height": h, "image_rotation": 0,
+                        "value": {"points": [[x / w * 100, y / h * 100] for x, y in d["polygon"]], "polygonlabels": [d["label"]]},
+                        "score": d.get("confidence")})
+            continue
+        if task == "pose" and d.get("keypoints"):   # 姿态：每个关键点作为 KeyPointLabels 预标注
+            from .labels import pose_keypoints
+            names = pose_keypoints(c.directory)
+            for (kx, ky, kc), kname in zip(d["keypoints"], names):
+                if kc >= 0.3:
+                    res.append({"from_name": "kp", "to_name": "image", "type": "keypointlabels", "original_width": w, "original_height": h,
+                                "value": {"x": kx / w * 100, "y": ky / h * 100, "width": 0.6, "keypointlabels": [kname]}})
+        res.append({"from_name": "objects", "to_name": "image", "type": "rectanglelabels",
+                    "original_width": w, "original_height": h,
+                    "value": {"x": x1 / w * 100, "y": y1 / h * 100, "width": (x2 - x1) / w * 100,
+                              "height": (y2 - y1) / h * 100, "rectanglelabels": [d["label"]]},
+                    "score": d.get("confidence")})
+    return res
+
+
 def push_prelabel(c, image_ids, selector="production", confidence=0.25, device="0"):
     """把图片送进 Label Studio，并带上模型预框（打开就有框，只需删错框、补漏框、调边界，再选“Targets reviewed”）。"""
     from .labels import LabelStudioClient, _make_tasks, _project_names, _remote_tasks_by_image
@@ -1019,38 +1121,7 @@ def push_prelabel(c, image_ids, selector="production", confidence=0.25, device="
     n_boxes = 0
     for t, path in zip(tasks, paths):
         p = by_path.get(str(Path(path).resolve()), {})
-        w, h = p.get("width") or 1, p.get("height") or 1
-        res = []
-        for d in p.get("detections") or []:
-            x1, y1, x2, y2 = d["xyxy"]
-            if task == "obb" and d.get("obb"):   # 旋转框：四角点 → Label Studio 可旋转矩形（左上角 + 宽高 + 角度）
-                import math
-                (ax, ay), (bx, by), (cx_, cy_), _ = d["obb"]
-                bw, bh = math.hypot(bx - ax, by - ay), math.hypot(cx_ - bx, cy_ - by)
-                res.append({"from_name": "objects", "to_name": "image", "type": "rectanglelabels",
-                            "original_width": w, "original_height": h, "image_rotation": 0,
-                            "value": {"x": ax / w * 100, "y": ay / h * 100, "width": bw / w * 100, "height": bh / h * 100,
-                                      "rotation": math.degrees(math.atan2(by - ay, bx - ax)) % 360, "rectanglelabels": [d["label"]]},
-                            "score": d.get("confidence")})
-                continue
-            if task == "segment" and d.get("polygon") and len(d["polygon"]) >= 3:   # 分割：多边形预标注
-                res.append({"from_name": "objects", "to_name": "image", "type": "polygonlabels",
-                            "original_width": w, "original_height": h, "image_rotation": 0,
-                            "value": {"points": [[x / w * 100, y / h * 100] for x, y in d["polygon"]], "polygonlabels": [d["label"]]},
-                            "score": d.get("confidence")})
-                continue
-            if task == "pose" and d.get("keypoints"):   # 姿态：每个关键点作为 KeyPointLabels 预标注
-                from .labels import pose_keypoints
-                names = pose_keypoints(c.directory)
-                for (kx, ky, kc), kname in zip(d["keypoints"], names):
-                    if kc >= 0.3:
-                        res.append({"from_name": "kp", "to_name": "image", "type": "keypointlabels", "original_width": w, "original_height": h,
-                                    "value": {"x": kx / w * 100, "y": ky / h * 100, "width": 0.6, "keypointlabels": [kname]}})
-            res.append({"from_name": "objects", "to_name": "image", "type": "rectanglelabels",
-                        "original_width": w, "original_height": h,
-                        "value": {"x": x1 / w * 100, "y": y1 / h * 100, "width": (x2 - x1) / w * 100,
-                                  "height": (y2 - y1) / h * 100, "rectanglelabels": [d["label"]]},
-                        "score": d.get("confidence")})
+        res = ls_prediction_result(c, task, p)
         n_boxes += len(res)
         t["data"]["ailabel_label_schema"] = {"task": task, "classes": list(c.scenario.classes)}
         t["predictions"] = [{"model_version": result.get("model_version", selector), "result": res}]
@@ -1060,11 +1131,99 @@ def push_prelabel(c, image_ids, selector="production", confidence=0.25, device="
             "model_version": result.get("model_version"), "url": f"{ls['base_url']}/projects/{ls['project_id']}"}
 
 
+# ── 给已经在 Label Studio 里的任务补上某个模型的预测：Label Studio“Create Annotations From Predictions”里才选得到这个模型 ──
+class AddPredictions(Spec):
+    selector: str = "latest"                     # 用哪个模型（latest / production / 版本名）
+    confidence: float = Field(default=0.25, ge=0.01, le=0.99)
+    device: str = "0"
+    only_unlabeled: bool = True                  # 只补还没人标过的任务（已标过的不打扰）
+    limit: int = Field(default=2000, ge=1, le=20000)
+
+
+def _ls_rows(payload):
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        return payload.get("results") or payload.get("predictions") or []
+    return []
+
+
+def add_predictions(c, selector="latest", confidence=0.25, device="0", only_unlabeled=True, limit=2000):
+    """用指定模型给当前 Label Studio 项目里已有的任务补预测（model_version = 模型版本名）。
+    同一个模型补过的任务跳过，不会重复；标注不动。补完在 Label Studio 里：选中任务 → Actions →
+    Create Annotations From Predictions → 选这个模型，或者打开任务直接看到预测框。"""
+    from . import progress as jp
+    from .labels import _matches_task, _project_names, excluded_images
+    from .models import predict, resolve_model
+    from .tasks import require_label_studio
+    ls = require_label_studio(c)
+    client, pid, task = _ls_client(ls), ls["project_id"], c.scenario.task
+    meta, _ = resolve_model(Path(c.directory), selector)
+    version = meta["version"]
+    if meta.get("task") != task or list(meta.get("classes") or []) != list(c.scenario.classes):
+        raise ValueError(f"模型 {version} 的类别 {meta.get('classes')} 和当前标注任务的标签 {list(c.scenario.classes)} 不一样，"
+                         "补进去的框类别会对不上；换一个按现在标签训练的模型")
+    names, dropped = _project_names(c.directory), excluded_images(c.directory)
+    targets, labeled = [], 0
+    for t in client.list_tasks(pid):
+        if not _matches_task(t, names, task):
+            continue
+        image_id = (t.get("data") or {}).get("image_id")
+        if not isinstance(image_id, str) or image_id in dropped:
+            continue
+        done = t.get("total_annotations") or t.get("is_labeled") or any(
+            not a.get("was_cancelled") for a in (t.get("annotations") or []) if isinstance(a, dict))
+        if done:
+            labeled += 1
+            if only_unlabeled:
+                continue
+        targets.append((t["id"], image_id))
+    todo, already = [], 0
+    for i, (tid, image_id) in enumerate(targets):
+        if len(todo) >= limit:
+            break
+        rows = _ls_rows(client._request("GET", "/api/predictions/", query={"task": tid}))
+        if any(isinstance(r, dict) and r.get("model_version") == version for r in rows):
+            already += 1
+        else:
+            todo.append((tid, image_id))
+        jp.report(i + 1, len(targets), "个任务", f"检查哪些任务还没有 {version} 的预测：{i + 1}/{len(targets)}")
+    added = boxes = missing = 0
+    for k in range(0, len(todo), 32):
+        chunk = todo[k:k + 32]
+        pairs = []
+        for tid, image_id in chunk:
+            try:
+                pairs.append((tid, c.image_paths([image_id])[0]))
+            except (FileNotFoundError, ValueError, KeyError, OSError):
+                missing += 1
+        if not pairs:
+            continue
+        result = predict(c.directory, selector, [p for _, p in pairs], confidence=confidence, device=device)
+        by_path = {str(Path(x["path"]).resolve()): x for x in result.get("predictions", [])}
+        for tid, path in pairs:
+            pred = by_path.get(str(Path(path).resolve()), {})
+            res = ls_prediction_result(c, task, pred)
+            scores = [d.get("confidence") for d in pred.get("detections") or [] if isinstance(d.get("confidence"), (int, float))]
+            client._request("POST", "/api/predictions/", payload={
+                "task": tid, "model_version": version, "result": res, "score": round(sum(scores) / len(scores), 4) if scores else 0})
+            added += 1
+            boxes += len(res)
+        jp.report(k + len(chunk), len(todo), "个任务", f"用 {version} 补预测：{k + len(chunk)}/{len(todo)}，共 {boxes} 个框")
+    base = ls.get("base_url") or ""
+    return {"model_version": version, "added": added, "boxes": boxes, "already": already, "missing_image": missing,
+            "skipped_labeled": labeled if only_unlabeled else 0, "url": f"{base}/projects/{pid}" if base else "",
+            "message": f"给 {added} 个任务补上了 {version} 的预测（{boxes} 个框）" + (f"，{already} 个以前补过" if already else "") +
+                       (f"，跳过已标过的 {labeled} 个" if only_unlabeled and labeled else "") +
+                       f"。在 Label Studio 里选中任务 → Actions → Create Annotations From Predictions → 选 {version}"}
+
+
 TOOLS.update({
     "curation.pick_type": Tool("按照片类型抽图", PickType, pick_type),
     "curation.backfill_types": Tool("按照片类型补类别", BackfillTypes, backfill_types),
     "labels.ls_setup": Tool("连接 Label Studio", LsSetup, ls_setup),
     "labels.push_prelabel": Tool("送 Label Studio（带模型预框）", PushPrelabel, push_prelabel),
+    "labels.add_predictions": Tool("给 Label Studio 里已有的任务补模型预测", AddPredictions, add_predictions),
     "labels.rereview": Tool("送回 Label Studio 复核（带已有的框）", Rereview, rereview),
     "labels.confirm_reviewed": Tool("批量补确认（框画了、忘选确认选项）", ConfirmReviewed, confirm_reviewed),
     "labels.ls_update_config": Tool("更新 Label Studio 标注界面（按现在的标签）", LsUpdateConfig, ls_update_config),
@@ -1878,7 +2037,7 @@ NODE_GROUPS = [
                      "workflow.route", "selection.files"]),
     ("③ 照片分类", ["types.classify_by_weights", "curation.suggest", "curation.backfill_types", "curation.confirm", "curation.unconfirm", "curation.train", "curation.reclassify",
                    "sorting.classify"]),
-    ("④ 标注", ["labels.ls_setup", "labels.ls_guide", "labels.push", "labels.push_prelabel", "labels.rereview", "labels.pull", "labels.import",
+    ("④ 标注", ["labels.ls_setup", "labels.ls_guide", "labels.push", "labels.push_prelabel", "labels.add_predictions", "labels.rereview", "labels.exclude", "labels.pull", "labels.import",
                "labels.import_yolo", "labels.ls_video", "labels.ls_webhook", "quality.mistakes"]),
     ("⑤ 数据集与训练", ["image.enhance", "dataset.publish", "dataset.freeze_test", "model.train", "model.train_classic", "model.train_semseg",
                       "model.register", "model.evaluate", "model.alias"]),

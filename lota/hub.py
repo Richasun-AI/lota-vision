@@ -556,6 +556,14 @@ def register_overview(router, engine, directory):
         public = load_settings(root)["label_studio"].get("public_url") or ""
         return review_items(d, task, classes, public)
 
+    @router.get("/projects/{project_id}/hub/excluded", tags=["hub"])
+    def project_excluded(project_id: str, annotation_task: str = ""):
+        """从当前标注任务里排除了的图（质量不行）：标注系统页可以看、可以恢复"""
+        from .labels import excluded_images
+        d = _scope(project_id, annotation_task)[0]
+        items = [{"image_id": k, **v} for k, v in excluded_images(d).items()]
+        return sorted(items, key=lambda x: x.get("at") or "", reverse=True)
+
     @router.post("/projects/{project_id}/hub/review-tab", tags=["hub"])
     def project_review_tab(project_id: str, payload: dict = Body(...)):
         """在 Label Studio 里建一个标签页，只显示“收不进来的标注”里某一组（kind）的任务。后台跑，GET 同一地址看进度"""

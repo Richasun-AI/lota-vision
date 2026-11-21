@@ -13,12 +13,38 @@ import re
 import shutil
 import sqlite3
 import tempfile
+import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from .catalog import get_image as _catalog_image
 from .tasks import source_project
+
+EXCLUDED = "excluded_images.json"   # 从这个标注任务里排除的图（拍糊、拍错、无关）：和图库的复核状态分开记
+
+
+def excluded_images(project_dir):
+    """{image_id: {"note", "at"}}：不进这个任务的数据集、不再送去标注、不在“收不进来的标注”里"""
+    f = Path(project_dir) / EXCLUDED
+    try:
+        data = json.loads(f.read_text(encoding="utf-8")) if f.is_file() else {}
+    except (ValueError, OSError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def set_excluded(project_dir, image_ids, note="", restore=False):
+    data = excluded_images(project_dir)
+    at = time.strftime("%Y-%m-%d %H:%M:%S")
+    for key in image_ids:
+        if restore:
+            data.pop(key, None)
+        else:
+            data[key] = {"note": note, "at": at}
+    (Path(project_dir) / EXCLUDED).write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    return data
+
 
 def get_image(project_dir,image_id):
     return _catalog_image(source_project(project_dir),image_id)
@@ -672,12 +698,16 @@ def _collect_samples(project_dir, classes, task, require_site):
         ).fetchall()
     samples = []
     excluded = Counter()
+    dropped = excluded_images(project_dir)
     for row in approved:
         image_id = row["image_id"]
         try:
             image, raw_path = _raw_image(project_dir, image_id)
         except (KeyError, FileNotFoundError, ValueError):
             excluded["missing_raw"] += 1
+            continue
+        if image_id in dropped:   # 从这个标注任务里排除了（拍糊、拍错、无关）
+            excluded["excluded_from_task"] += 1
             continue
         original=json.loads(row["original"])
         exports=original if isinstance(original,list) else [original]
@@ -993,6 +1023,11 @@ def push_tasks(project_dir, label_studio, image_ids, classes, *, task="detect"):
     _classes(classes, task)
     project_id = _remote_project(label_studio)
     client = LabelStudioClient.from_config(label_studio)
+    dropped = excluded_images(project_dir)   # 从这个标注任务里排除了的图不再送去标注
+    skipped = [i for i in dict.fromkeys(image_ids) if i in dropped]
+    image_ids = [i for i in image_ids if i not in dropped]
+    if not image_ids:
+        return {"project_id": project_id, "pushed": 0, "existing": 0, "tasks": {}, "skipped_rejected": len(skipped)}
     requested = _make_tasks(project_dir, image_ids, task=task,
                             media_base=label_studio.get("media_base"),
                             local_files_root=label_studio.get("local_files_root"))
@@ -1034,7 +1069,7 @@ def push_tasks(project_dir, label_studio, image_ids, classes, *, task="detect"):
              for image_id, remote_id in matched.items()),
         )
     return {"project_id": project_id, "pushed": pushed, "existing": len(requested) - pushed,
-            "tasks": matched}
+            "tasks": matched, "skipped_rejected": len(skipped)}
 
 
 def pull_annotations(project_dir, label_studio, classes, *, task="detect"):

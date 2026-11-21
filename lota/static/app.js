@@ -112,7 +112,7 @@ function message(error) {
 }
 
 async function request(path, method = "GET", body, mode = "json") {
-  if(method==="GET" && state.annotationTask && /\/projects\/[^/]+\/(annotations|datasets|models|hub\/(ls-status|review-items|review-tab))(\?|$)/.test(path)){
+  if(method==="GET" && state.annotationTask && /\/projects\/[^/]+\/(annotations|datasets|models|hub\/(ls-status|review-items|review-tab|excluded))(\?|$)/.test(path)){
     path+=(path.includes("?")?"&":"?")+"annotation_task="+encodeURIComponent(state.annotationTask);
   }
   const headers = {};
@@ -1178,13 +1178,42 @@ async function reviewItemsPanel(project,runAndRefresh){
           "这会跳过逐张检查：如果其中有框没画全的图，漏掉的目标会被当成“不是目标”进训练集。\n只在你确定当时都画全了时使用。继续？"))return;
         return runAndRefresh("labels.confirm_reviewed",{image_ids:use},"批量补确认")(ev);
       },"",{title:"只补“框画了、确认选项没选”的；没画框、或画了框却选 No target 的不动"}):"",
-      filter==="stale"||filter==="class"||filter==="coverage"?button("送回 Label Studio 复核",()=>toolDialog("labels.rereview"),filter==="stale"?"primary":""):"");
+      filter==="stale"||filter==="class"||filter==="coverage"?button("送回 Label Studio 复核",()=>toolDialog("labels.rereview"),filter==="stale"?"primary":""):"",
+      button(ids.length?"排除所选 "+ids.length+" 张（质量不行）":"排除所选（先勾选图）",(ev)=>{   // 拍糊、拍错、无关的图混进来了
+        if(!ids.length){notifyUser("先在下面勾选要排除的图（拍糊、拍错、和任务无关的）",true);return;}
+        if(!confirm("排除这 "+ids.length+" 张图：\n· 标成“已排除”：不进数据集、不再送去标注、从这里消失；\n· 同时删掉它们在 Label Studio 里的任务（标注队列里不再出现）。\n\n照片本身不删，在图库里选中点“恢复所选为待复核”可以撤销（Label Studio 任务要重新提交）。继续？"))return;
+        return runAndRefresh("labels.exclude",{image_ids:ids,delete_in_label_studio:true},"排除质量不行的图")(ev);
+      },"danger",{title:"标成已排除（可恢复），并删掉 Label Studio 里的任务"}));
   };
   draw();
   return panel(h("strong",{},"收不进来的标注："+items.length+" 张"),
     h("p",{class:"small muted"},"在 Label Studio 提交了、但引擎没收进来（或要重新确认）的图。点上面的分组看每一类；“LS #…” 直接打开那个任务，改好提交后点“立即回收标注”，改好的会从这里消失。"),
     filter==="rotated"||counts.rotated?h("p",{class:"small muted"},"斜框转正：把斜框改成刚好包住它的水平框（直接改 Label Studio 里的标注，然后自动回收）。角度大于 45° 的不自动转，请在 Label Studio 里重画。"):"",
     tabs,bar,grid);
+}
+// 从当前标注任务里排除了的图（质量不行）：看图、恢复
+async function excludedImagesPanel(project,runAndRefresh){
+  const items=await request(pathFor(project)+"/hub/excluded").catch(()=>[]);
+  if(!items.length)return "";
+  const open=()=>{
+    const picked=new Set(),grid=h("div",{class:"gallery"});
+    const draw=()=>grid.replaceChildren(...items.map((it)=>{
+      const img=h("div",{class:"fix-media"},h("span",{class:"small muted"},"加载中…"));
+      request(previewPath(project,it),"GET",undefined,"blob").then((blob)=>{const u=URL.createObjectURL(blob),el=h("img",{alt:""});
+        el.addEventListener("load",()=>URL.revokeObjectURL(u),{once:true});el.src=u;img.replaceChildren(el);}).catch(()=>img.replaceChildren(h("span",{},"预览不可用")));
+      const check=h("input",{type:"checkbox",checked:picked.has(it.image_id),onchange:(e)=>{e.target.checked?picked.add(it.image_id):picked.delete(it.image_id);}});
+      return h("article",{class:"photo"},img,h("div",{class:"photo-body"},h("strong",{class:"photo-name",title:it.image_id},it.image_id.slice(0,12)),
+        h("p",{class:"small muted"},(it.note||"")+(it.at?" · "+it.at:"")),h("label",{class:"photo-select"},check,"选取")));
+    }));
+    draw();
+    openDialog("已从标注中排除的图（"+items.length+" 张）",h("div",{},
+      h("p",{class:"small muted"},"这些图不进这个标注任务的数据集、不再送去标注。恢复后，删掉了 Label Studio 任务的要重新“提交所选图片”。图库里的照片一直都在。"),
+      h("div",{class:"actions"},button("恢复所选",(ev)=>{
+        if(!picked.size){notifyUser("先勾选要恢复的图",true);return;}
+        dialog.close();return runAndRefresh("labels.exclude",{image_ids:[...picked],restore:true},"恢复排除的图")(ev);},"primary")),grid),true);
+  };
+  return panel(h("div",{class:"rail"},h("strong",{},"已从标注中排除："+items.length+" 张"),button("查看 / 恢复",open,"small")),
+    h("p",{class:"small muted"},"在“收不进来的标注”里因为质量不行排除的图。"));
 }
 // 旧标注认定不含新加的类别：先预览（哪些旧标签表、少了哪些类别、多少张），确认后记下认定并回收
 async function ackNewClassesDialog(project,withTask){
@@ -1248,6 +1277,7 @@ async function labelsPage(){
       button("另建一个新项目（旧项目不动）",runAndRefresh("labels.ls_setup",{new:true},"新建 Label Studio 项目",
         async()=>{await request(pathFor(project)+"/tools/labels.ls_webhook","POST",withTask({enabled:true,engine_url:"http://127.0.0.1:8795"}));await initialize(project.id);})))):"";
   const reviewPanel=await reviewItemsPanel(project,runAndRefresh);
+  const excludedPanel=await excludedImagesPanel(project,runAndRefresh);
   let status;
   if(!ls.connected)status=panel(h("strong",{},"Label Studio"),h("p",{},(taskDef?"标注任务“"+taskDef.name+"”":"这个子项目")+"还没连接 Label Studio。第一次“提交所选图片”时会自动按标签建项目。"));
   else if(ls.error)status=panel(h("strong",{},"Label Studio 项目 #"+ls.project_id),h("p",{class:"error"},"连不上 Label Studio："+ls.error));
@@ -1269,7 +1299,7 @@ async function labelsPage(){
     guideText,h("div",{class:"actions"},button("保存并同步到 Label Studio",asyncClick(async()=>{
       const r=await request(guideUrl,"PUT",{text:guideText.value});notifyUser("标注规范已保存；"+r.label_studio);}),"primary")));
   return h("div",{},page("标注系统","从已抽取图片提交任务，保留人工复核结果。"),
-    annotationTaskPicker(),classesPanel,status,cfgPanel,reviewPanel,guidePanel,panel(button("提交所选图片",()=>toolDialog("labels.push")),button("回收标注（选参数）",()=>toolDialog("labels.pull")),
+    annotationTaskPicker(),classesPanel,status,cfgPanel,reviewPanel,excludedPanel,guidePanel,panel(button("提交所选图片",()=>toolDialog("labels.push")),button("回收标注（选参数）",()=>toolDialog("labels.pull")),button("给已有任务补模型预测",()=>toolDialog("labels.add_predictions"),"",{title:"新训练的模型给 Label Studio 里还没标的任务画上预测框；补完在 Label Studio 的 Create Annotations From Predictions 里能选到它"}),
     button("导入标注 JSON",()=>toolDialog("labels.import"))),
     h("details",{},h("summary",{},"标注明细（原始数据）"),code(annotations)));
 }
