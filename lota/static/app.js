@@ -586,7 +586,7 @@ async function selectAllInRange(project = state.project) {
     const q = new URLSearchParams({limit: "200", offset: String(offset)});
     let rows;
     if (r.usingSorting) { if (r.category) q.set("category", r.category); if (!r.status) q.set("exclude_rejected", "true"); rows = (await request(pathFor(project) + "/sorting?" + q)).items || []; }
-    else { q.set("status", !r.status ? "active" : r.status === "all" ? "" : r.status); if (!q.get("status")) q.delete("status"); if (r.checkpoint) q.set("checkpoint", r.checkpoint); rows = await request(pathFor(project) + "/images?" + q); }
+    else { q.set("status", !r.status ? "active" : r.status === "all" ? "" : r.status); if (!q.get("status")) q.delete("status"); if (r.checkpoint) q.set("checkpoint", r.checkpoint); if (r.category) q.set("category", r.category); rows = await request(pathFor(project) + "/images?" + q); }   // 类别 + 状态一起筛时也要带类别，跟列表页一致（以前漏了，会从全部类别里选满 1000 张）
     ids.push(...rows.map((x) => x.image_id));
     if (rows.length < 200) break;
   }
