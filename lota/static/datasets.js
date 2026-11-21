@@ -39,6 +39,8 @@ async function render() {
     h("div", { class: "section-title" }, h("h2", {}, "标注质检报告"), h("span", { class: "muted small" }, "用模型复查人工标注，找漏标、多标、框不准")),
     h("div", { id: "qa" }));
   loadQA(pid);
+  const want = new URLSearchParams(location.search).get("qa");   // 从任务记录“查看报告”跳过来的
+  if (want && !render.openedQA) { render.openedQA = true; openQA(pid, want).catch((e) => UI.toast(e.message, true)); }
 }
 function kpi(label, value, hint) { return h("div", { class: "card kpi" }, h("span", { class: "label" }, label), h("span", { class: "value" }, value), h("span", { class: "hint" }, hint)); }
 
@@ -346,7 +348,7 @@ function runQA(pid, d) {
     h("div", { class: "callout warn" }, "注意：用训练过这批图的模型去查训练集，模型会“记住”标注，查出来的会偏少；查验证集更可靠。")),
     [{ label: "取消" }, { label: "开始检查", kind: "primary", run: async () => {
       UI.toast("检查中…（每 100 张约 10–20 秒）");
-      const r = await UI.runTool(pid, "quality.mistakes", { dataset_version: d.version, split: document.querySelector("input[name=qsplit]:checked").value, conf_missing: Number(miss.value), device: "0" });
+      const r = await UI.runTool(pid, "quality.mistakes", { dataset_version: d.version, split: document.querySelector("input[name=qsplit]:checked").value, conf_missing: Number(miss.value), device: "0", limit: 5000 });
       UI.toast(`查了 ${r.checked} 张，可疑 ${r.flagged} 张`); loadQA(pid); openQA(pid, r.qa_id);
     } }]);
 }
@@ -375,7 +377,8 @@ async function openQA(pid, id) {
           if (v) q.decisions[it.image_id] = v; else delete q.decisions[it.image_id];
           draw();
         } }, t)),
-        it.ls_url ? h("a", { class: "btn sm", href: it.ls_url, target: "_blank" }, "去 Label Studio 改") : null);
+        it.ls_url ? h("a", { class: "btn sm", href: it.ls_url, target: "_blank" }, "去 Label Studio 改")
+          : h("span", { class: "tiny muted", title: "这张图没送进当前 Label Studio 项目（或在旧项目里）" }, "不在 Label Studio 里"));
       return h("div", { class: "card", style: { boxShadow: "none", padding: "10px" } }, cv,
         h("div", { class: "row", style: { marginTop: "6px" } }, ...[...new Set(it.issues.map((x) => x.type))].map((t) => h("span", { class: "badge " + ISSUE[t][1] }, ISSUE[t][0])),
           h("span", { class: "tiny muted" }, `可疑分 ${it.score} · ${it.split}`)),
@@ -390,8 +393,36 @@ async function openQA(pid, id) {
   }
   const pager = h("div", { class: "row", style: { marginTop: "10px" } }, h("button", { class: "btn sm", onclick: () => { offset = Math.max(0, offset - 30); draw(); } }, "上一页"),
     h("button", { class: "btn sm", onclick: () => { offset += 30; draw(); } }, "下一页"));
-  UI.modal(`标注质检报告 · ${q.dataset_version}`, h("div", {}, info, tabs, grid, pager,
-    h("div", { class: "callout", style: { marginTop: "10px" } }, "改完标注后：回收标注 → 打包新数据集 → 再训练。改得越干净，模型越准。")), [], { wide: true });
+  // 怎么改：把可疑图集中到 Label Studio 的一个标签页，在那里连着一张张改（比一张张点链接快）；改完回收
+  const fixOut = h("div", { class: "small", style: { marginTop: "6px" } });
+  const toLs = h("button", { class: "btn primary", onclick: async () => {
+    toLs.disabled = true;
+    const what = filter ? ISSUE[filter][0] : "所有可疑";
+    fixOut.replaceChildren(h("span", { class: "badge info" }, "处理中…"), ` 正在把「${what}」的图放进 Label Studio 标签页（几百张要一两分钟）`);
+    try {
+      const r = await UI.runTool(pid, "quality.ls_tab", { qa_id: id, issue: filter }, {
+        onProgress: (j) => { const p = UI.jobProgress(j); if (p) fixOut.replaceChildren(h("span", { class: "badge info" }, "处理中…"), p); } });
+      fixOut.replaceChildren(h("div", {}, "✅ " + r.message),
+        r.url ? h("a", { class: "btn primary", href: r.url, target: "_blank", style: { marginTop: "6px" } }, `打开 Label Studio「${r.title}」标签页`) : null,
+        h("div", { class: "muted", style: { marginTop: "4px" } }, "在 Label Studio 里点上方的“Label All Tasks”（或点第一张），就会按这个清单一张张出：",
+          "漏标的补框、多标的删框、类别错的改类别、框不准的拖准，然后点 Update（或 Submit）进下一张。标注本身没问题的直接跳过，回来在这里点“标注没问题”。"));
+    } catch (e) { fixOut.replaceChildren(h("span", { style: { color: "var(--danger)" } }, "❌ " + e.message)); }
+    finally { toLs.disabled = false; }
+  } }, "在 Label Studio 里逐张改");
+  const pullBtn = h("button", { class: "btn", onclick: async () => {
+    pullBtn.disabled = true;
+    fixOut.replaceChildren(h("span", { class: "badge info" }, "回收中…"));
+    try {
+      const r = await UI.runTool(pid, "labels.pull", {});
+      fixOut.replaceChildren(`✅ 回收完成：处理 ${r.processed ?? "—"} 条，通过 ${r.accepted ?? "—"} 条。下一步：关掉这个窗口，点“＋ 打包最新标注”，再到模型中心训练。`);
+    } catch (e) { fixOut.replaceChildren(h("span", { style: { color: "var(--danger)" } }, "❌ " + e.message)); }
+    finally { pullBtn.disabled = false; }
+  } }, "改完了：回收标注");
+  const fixBar = h("div", { class: "callout", style: { margin: "8px 0" } },
+    h("b", {}, "怎么改："), " 先在下面的分类里选要改的（比如“疑似漏标”），点「在 Label Studio 里逐张改」，按清单改完后点「改完了：回收标注」，再打包新数据集、重新训练。",
+    "看过觉得标注没问题的，点卡片上的“标注没问题”，下次送去改时会跳过。",
+    h("div", { class: "row", style: { marginTop: "6px" } }, toLs, pullBtn), fixOut);
+  UI.modal(`标注质检报告 · ${q.dataset_version}`, h("div", {}, info, fixBar, tabs, grid, pager), [], { wide: true });
   draw();
 }
 

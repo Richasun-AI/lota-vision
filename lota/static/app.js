@@ -1316,6 +1316,12 @@ async function jobsPage(){
  button("查看结果",asyncClick(async()=>openDialog(job.id,code(await request(pathFor()+"/jobs/"+job.id)),true))),
  ...(["queued","paused","failed","interrupted"].includes(job.status)?[button(job.status==="queued"?"暂停":"续跑",asyncClick(async()=>{
  await request(pathFor()+"/jobs/"+job.id+"/control","POST",{command:job.status==="queued"?"pause":"resume"});navigate("jobs");}))]:[]),
+ job.kind==="quality.mistakes"&&job.status==="succeeded"?button("查看报告并修改",asyncClick(async()=>{   // 报告在数据集页（能看图、送去 Label Studio 改）
+  const full=await request(pathFor()+"/jobs/"+job.id),qa=full.outputs?.result?.qa_id;
+  if(!qa)throw Error("这个任务的结果里没有报告编号");
+  const t=(full.spec?.steps||[])[0]?.args?.annotation_task||"";
+  try{t?localStorage.setItem("lota.annotationTask:"+state.project.id,t):localStorage.removeItem("lota.annotationTask:"+state.project.id);}catch{}
+  location.href="/datasets?project="+encodeURIComponent(state.project.id)+"&qa="+encodeURIComponent(qa);}),"primary"):null,
  jobProgressView(job),
  job.error?h("p",{class:"error"},job.error):null)));
 }

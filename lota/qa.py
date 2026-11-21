@@ -109,6 +109,63 @@ def find_mistakes(c, selector="production", dataset_version="", split="", limit=
 
 TOOLS["quality.mistakes"] = Tool("找标注错误", Mistakes, find_mistakes)
 
+QA_TAB_TITLE = "LOTA·标注质检"
+QA_ISSUES = {"missing": "疑似漏标", "spurious": "疑似多标/标错", "loc": "框不准"}
+
+
+class QaTab(Spec):
+    qa_id: str
+    issue: str = Field(default="", pattern="^(|missing|spurious|loc)$")   # 空 = 所有可疑
+    skip_decided: bool = True              # 跳过已标“标注没问题 / 已改好”的
+
+
+def qa_pick(report, decisions, issue="", skip_decided=True):
+    """报告里要送去 Label Studio 改的图（按可疑程度排好的 image_id）"""
+    out = []
+    for it in report["items"]:
+        if issue and not any(x["type"] == issue for x in it["issues"]):
+            continue
+        if skip_decided and decisions.get(it["image_id"]) in ("fine", "fixed"):
+            continue
+        out.append(it["image_id"])
+    return out
+
+
+def qa_tab(c, qa_id, issue="", skip_decided=True):
+    """把质检报告里的可疑图在 Label Studio 里集中到一个标签页（“LOTA·标注质检”），在那里一张张改：
+    点第一张，改完点 Update，再点下一张。改完回收标注、打包新数据集。再点一次会换成最新的清单。"""
+    from . import progress
+    from .flow import _ls_client, ls_tag_tab
+    from .hub import load_settings
+    from .tasks import require_label_studio, source_project
+    root = Path(c.directory)
+    name = Path(qa_id).name
+    report = json.loads((root / "qa" / f"{name}.json").read_text(encoding="utf-8"))
+    dec_file = root / "qa" / f"{name}.decisions.json"
+    decisions = json.loads(dec_file.read_text(encoding="utf-8")) if dec_file.is_file() else {}
+    images = qa_pick(report, decisions, issue, skip_decided)
+    ls = require_label_studio(c)
+    pid = ls["project_id"]
+    db = root / "annotations" / "index.sqlite3"
+    links = {}
+    if db.is_file():
+        with closing(sqlite3.connect(db, timeout=10)) as conn:
+            for image_id, project, remote in conn.execute("SELECT image_id, project_id, remote_id FROM label_studio_links"):
+                if str(project) == str(pid):
+                    links[image_id] = int(remote)
+    want = {links[i] for i in images if i in links}
+    public = load_settings(source_project(root))["label_studio"].get("public_url") or ""
+    out = ls_tag_tab(_ls_client(ls), pid, "lota_qa", "qa", want, QA_TAB_TITLE, base_url=public or ls.get("base_url") or "",
+                     on_step=lambda d, t: progress.report(d, t, "个任务", f"在 Label Studio 里标记 {d}/{t} 个任务"))
+    out.update({"images": len(images), "not_in_label_studio": len(images) - sum(1 for i in images if i in links),
+                "issue": QA_ISSUES.get(issue, "所有可疑"), "qa_id": name})
+    if out["not_in_label_studio"]:
+        out["message"] += f"；另有 {out['not_in_label_studio']} 张不在当前 Label Studio 项目 #{pid} 里（没送去标过，或在旧项目里）"
+    return out
+
+
+TOOLS["quality.ls_tab"] = Tool("质检结果送到 Label Studio 标签页", QaTab, qa_tab)
+
 
 def _ls_links(root, public):
     db = Path(root) / "annotations" / "index.sqlite3"

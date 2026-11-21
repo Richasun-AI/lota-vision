@@ -858,15 +858,26 @@ def review_tab(directory, ls_cfg, task, classes, kind, public_url="", progress=N
     client, pid = _ls_client(ls_cfg), ls_cfg["project_id"]
     want = {int(l["task"]) for it in review_items(directory, task, classes) if it["kind"] == kind
             for l in it["links"] if str(l.get("project")) == str(pid)}
+    extra = []
+    if kind == "coverage":   # 在 LS 里选了确认选项并点 Update 保存的，马上从这个标签页消失，不用等回收
+        extra = [{"filter": "filter:tasks:annotations_results", "operator": "not_contains", "type": "String", "value": v}
+                 for v in ("Targets reviewed", "No target", "Unsure")]
+    return ls_tag_tab(client, pid, "lota_check", kind, want, REVIEW_TAB_TITLES[kind], extra,
+                      public_url or ls_cfg.get("base_url") or "", progress)
+
+
+def ls_tag_tab(client, pid, field, value, want, title, extra_filters=(), base_url="", progress=None, on_step=None):
+    """Label Studio 里建（或刷新）一个标签页，只显示 want 里的任务：给这些任务的 data 加字段 field=value
+    （其他字段原样不动），标签页按这个字段筛选；不在 want 里、但还带着这个标记的任务把字段去掉。"""
     progress = progress if progress is not None else {}
     changes = []
     for t in client.list_tasks(pid):
         data = t.get("data") or {}
-        has, should = data.get("lota_check") == kind, t.get("id") in want
+        has, should = data.get(field) == value, t.get("id") in want
         if has != should:
-            new = {k: v for k, v in data.items() if k != "lota_check"}
+            new = {k: v for k, v in data.items() if k != field}
             if should:
-                new["lota_check"] = kind
+                new[field] = value
             changes.append((t["id"], new, should))
     progress.update(total=len(changes), done=0)
     added = removed = 0
@@ -874,19 +885,17 @@ def review_tab(directory, ls_cfg, task, classes, kind, public_url="", progress=N
         client._request("PATCH", f"/api/tasks/{tid}/", payload={"data": new})
         added, removed = added + should, removed + (not should)
         progress["done"] = added + removed
-    title = REVIEW_TAB_TITLES[kind]
+        if on_step:
+            on_step(added + removed, len(changes))
     views = client._request("GET", "/api/dm/views/", query={"project": pid}) or []
     view = next((v for v in views if (v.get("data") or {}).get("title") == title), None)
-    items = [{"filter": "filter:tasks:data.lota_check", "operator": "equal", "type": "String", "value": kind}]
-    if kind == "coverage":   # 在 LS 里选了确认选项并点 Update 保存的，马上从这个标签页消失，不用等回收
-        items += [{"filter": "filter:tasks:annotations_results", "operator": "not_contains", "type": "String", "value": v}
-                  for v in ("Targets reviewed", "No target", "Unsure")]
+    items = [{"filter": f"filter:tasks:data.{field}", "operator": "equal", "type": "String", "value": value}, *extra_filters]
     data = {"title": title, "filters": {"conjunction": "and", "items": items}}
     if view:
         client._request("PATCH", f"/api/dm/views/{view['id']}/", payload={"project": pid, "data": {**(view.get("data") or {}), **data}})
     else:
         view = client._request("POST", "/api/dm/views/", payload={"project": pid, "data": data})
-    base = (public_url or ls_cfg.get("base_url") or "").rstrip("/")
+    base = (base_url or "").rstrip("/")
     return {"tasks": len(want), "added": added, "removed": removed, "title": title,
             "url": f"{base}/projects/{pid}/data?tab={view['id']}" if base and view.get("id") else "",
             "message": f"Label Studio 里的“{title}”标签页现在有 {len(want)} 个任务"
