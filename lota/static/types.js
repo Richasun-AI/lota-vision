@@ -555,6 +555,16 @@ async function assistDlg() {
   const pSel = h("select", { class: "select" }, ...projects.map((p) => h("option", { value: p.id, selected: p.id === (saved.project || UI.project()) },
     `${p.config.name || p.id}（${TASKS[p.config.task]}）`)));
   const mSel = h("select", { class: "select" });
+  // 模型可能训练在子项目的某个标注任务里（annotation-tasks/<任务>/models），要能选
+  const tSel = h("select", { class: "select" });
+  const tField = h("div", { class: "field" }, h("label", {}, "标注任务"), tSel, h("div", { class: "help" }, "模型是在哪个标注任务里训练的"));
+  const drawTasks = () => {
+    const p = projects.find((x) => x.id === pSel.value), tasks = Object.entries(p?.config?.annotation_tasks || {});
+    const want = saved.project === pSel.value && "task" in saved ? saved.task : UI.task(pSel.value);
+    tSel.replaceChildren(h("option", { value: "" }, "子项目本身（历史默认任务）"),
+      ...tasks.map(([k, d]) => h("option", { value: k, selected: k === want }, `${d.name || k}（${k}）`)));
+    tField.style.display = tasks.length ? "" : "none";
+  };
   const rulesBox = h("div"), status = h("div", { class: "small" });
   const conf = h("input", { class: "input", type: "number", min: 0.05, max: 0.95, step: 0.05, value: saved.min_confidence ?? 0.5 });
   const boxes = h("input", { class: "input", type: "number", min: 1, max: 100, step: 1, value: 1 });
@@ -582,24 +592,27 @@ async function assistDlg() {
   };
   const loadModels = async () => {
     mSel.replaceChildren(h("option", {}, "加载中…"));
-    const d = await UI.api(`/api/projects/${pSel.value}/models`).catch(() => ({ models: [], aliases: {} }));
+    const q = tSel.value ? `?annotation_task=${encodeURIComponent(tSel.value)}` : "";
+    const d = await UI.api(`/api/projects/${pSel.value}/models${q}`).catch(() => ({ models: [], aliases: {} }));
     models = d.models || [];
     const byVer = Object.fromEntries(models.map((m) => [m.version, m]));
     const opts = [...Object.entries(d.aliases || {}).filter(([, v]) => byVer[v]).map(([a, v]) => [a, `${a}（= ${v}）`, byVer[v]]),
       ...models.slice().reverse().map((m) => [m.version, m.version, m])];
     mSel.replaceChildren(...(opts.length ? opts.map(([v, label]) => h("option", { value: v, selected: v === saved.model }, label))
-      : [h("option", { value: "" }, "这个子项目还没有训练好的模型")]));
+      : [h("option", { value: "" }, tSel.value ? "这个标注任务还没有训练好的模型" : "这个子项目还没有训练好的模型（模型可能在某个标注任务里，选一下上面的标注任务）")]));
     const pick = () => { const o = opts.find(([v]) => v === mSel.value); classes = o ? (o[2].classes || []) : []; drawRules(); };
     mSel.onchange = pick; pick();
   };
-  pSel.onchange = loadModels;
+  pSel.onchange = () => { drawTasks(); loadModels(); };
+  tSel.onchange = loadModels;
+  drawTasks();
   await loadModels();
 
   const field = (label, el, help) => h("div", { class: "field" }, h("label", {}, label), el, help ? h("div", { class: "help" }, help) : null);
   const body = h("div", { class: "form" },
     h("p", { class: "small muted" }, `用子项目里训练好的模型扫图库“${S.lib.name}”的照片：`, "图里认出规则里的类别，就建议归到对应的照片类型（左侧类型后面的 💡 数字）。",
       "建议不算人工确认，要到该类型的「💡 权重建议」里看图，整批确认或忽略；确认后成为样板，再点“重新训练并归类全部”，分类器就更准。人工确认过类型的照片不扫、不改。"),
-    h("div", { class: "two" }, field("子项目", pSel), field("模型", mSel, "latest = 最新训练的；production = 正式使用的")),
+    h("div", { class: "three" }, field("子项目", pSel), tField, field("模型", mSel, "latest = 最新训练的；production = 正式使用的")),
     field("归类规则", rulesBox, "比如：grounding_bar → 接地/防雷；一张图中了多条规则，取把握最大的那条"),
     h("div", { class: "three" }, field("最低置信度", conf, "0.5 稳妥；调低建议多，误判也多"), field("至少认出几个目标", boxes, "分类模型忽略这项"), field("本次最多扫多少张", limit, "没扫完的下次接着扫")),
     h("div", { class: "two" }, field("扫描范围", scope, "比如只扫“其他/无关”，给临时仓库里的照片找归宿"),
@@ -612,8 +625,9 @@ async function assistDlg() {
       if (!mSel.value) throw new Error("先选一个有模型的子项目");
       if (!good.length) throw new Error("至少要一条完整的规则：勾选类别，再选照片类型");
       const args = { library: LIB, model: mSel.value, rules: good.map((r) => ({ labels: r.labels, photo_type: r.type })), min_confidence: Number(conf.value) || 0.5,
-        min_boxes: Number(boxes.value) || 1, scan_limit: Number(limit.value) || 20000, restart: restart.checked, ...(scope.value ? { scope_types: scope.value } : {}) };
-      try { localStorage.setItem(ASSIST_KEY, JSON.stringify({ project: pSel.value, model: mSel.value, rules: good, min_confidence: args.min_confidence })); } catch { /* 浏览器不让存就算了 */ }
+        min_boxes: Number(boxes.value) || 1, scan_limit: Number(limit.value) || 20000, restart: restart.checked, ...(scope.value ? { scope_types: scope.value } : {}),
+        ...(tSel.value ? { annotation_task: tSel.value } : {}) };
+      try { localStorage.setItem(ASSIST_KEY, JSON.stringify({ project: pSel.value, task: tSel.value, model: mSel.value, rules: good, min_confidence: args.min_confidence })); } catch { /* 浏览器不让存就算了 */ }
       const t0 = Date.now();
       status.replaceChildren(h("span", { class: "badge info" }, "扫描中…"), " 显卡上大约每分钟几千张；可以关掉这个窗口，扫完会提示");
       const result = await UI.runTool(pSel.value, "types.classify_by_weights", args, { timeoutSec: 6 * 3600,
